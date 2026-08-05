@@ -17,6 +17,12 @@
 - Business logic in `app/services/`, not in routers.
 - Background tasks (FastAPI `BackgroundTasks`) live in `app/tasks/`. They use a dedicated **sync** engine (psycopg) because mixing event loops with BackgroundTasks is fragile.
 
+## Embeddings
+- Provider is `gemini-embedding-001` (768-dim, free tier 1500 req/day).
+- Set `EMBEDDINGS_PROVIDER=gemini` and `GEMINI_API_KEY` in `.env`.
+- Alternative providers: `openai` (text-embedding-3-small@768) and `ollama` (nomic-embed-text, etc.).
+- `task_type=RETRIEVAL_DOCUMENT` is used at index time; queries will use `RETRIEVAL_QUERY` in Etapa 4.
+
 ## pgvector
 - All vector columns are `vector(768)` (locked in).
 - HNSW index with `vector_cosine_ops` for similarity search.

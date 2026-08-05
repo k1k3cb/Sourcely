@@ -28,10 +28,11 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_bucket: str = "documents"
 
-    embeddings_provider: Literal["openai", "ollama"] = "openai"
-    embedding_model: str = "text-embedding-3-small"
+    embeddings_provider: Literal["openai", "ollama", "gemini"] = "gemini"
+    embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
     openai_api_key: str = ""
+    gemini_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
     llm_provider: Literal["groq", "openai"] = "groq"
