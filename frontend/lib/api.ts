@@ -9,13 +9,19 @@ export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  if (!isFormData && init.body !== undefined && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -46,9 +52,34 @@ export const api = {
     }),
 };
 
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<T>(path, { method: "POST", body: form });
+}
+
+export async function deleteRequest<T>(path: string): Promise<T> {
+  return apiFetch<T>(path, { method: "DELETE" });
+}
+
 export type CurrentUser = {
   id: string;
   email: string;
   is_active: boolean;
   created_at: string;
+};
+
+export type DocumentStatus = "uploaded" | "processing" | "ready" | "failed";
+
+export type DocumentRecord = {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  page_count: number | null;
+  status: DocumentStatus;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  signed_url?: string | null;
 };

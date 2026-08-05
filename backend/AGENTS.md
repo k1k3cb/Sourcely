@@ -6,6 +6,7 @@
 - Create migration: `alembic revision --autogenerate -m "msg"`
 - Apply migrations: `alembic upgrade head`
 - Health check: `GET /health`
+- Run tests: `pytest -q`
 
 ## Conventions
 - Async-first (SQLAlchemy 2 async, asyncpg, httpx, openai async client).
@@ -14,7 +15,7 @@
 - Pydantic schemas in `app/schemas/`, separate from ORM models.
 - API routers in `app/api/`, mounted under `/api/v1/...` in `main.py`.
 - Business logic in `app/services/`, not in routers.
-- Background tasks (FastAPI `BackgroundTasks`) live in `app/tasks/`.
+- Background tasks (FastAPI `BackgroundTasks`) live in `app/tasks/`. They use a dedicated **sync** engine (psycopg) because mixing event loops with BackgroundTasks is fragile.
 
 ## pgvector
 - All vector columns are `vector(768)` (locked in).
@@ -22,11 +23,18 @@
 - Similarity = `1 - (embedding <=> query)`.
 - Every chunk stores `embedding_model` so we can migrate models later.
 
+## Storage
+- PDFs go to Supabase Storage via `app/services/storage.py`.
+- Bucket is private; clients download via signed URLs.
+- Tests use `InMemoryStorage` (set in `tests/conftest.py`).
+
 ## Auth
 - JWT signed with `JWT_SECRET`, `HS256`, expires in `JWT_EXPIRES_MINUTES`.
 - Cookie name: `token`, `HttpOnly`, `SameSite=Lax`, `Secure` in production.
 - `get_current_user` dependency in `app/core/security.py`.
 
-## Tests
-- `pytest tests/` from the backend directory.
-- Use httpx + ASGITransport against the FastAPI app, no need for a running server.
+## Documents
+- MIME is checked via Content-Type header AND `%PDF-` magic bytes.
+- Max size from `MAX_UPLOAD_MB` env var (default 20 MB).
+- Status transitions: `uploaded -> processing -> ready | failed`.
+- All ownership filters live in route handlers, not the model.

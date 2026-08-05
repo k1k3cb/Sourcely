@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import get_settings
 from app.db.base import Base, get_session
 from app.main import app
+from app.services.storage import InMemoryStorage, set_storage
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -24,6 +25,11 @@ def _override_settings() -> Any:
     settings.jwt_secret = "test-secret"
     settings.cookie_secure = False
     return settings
+
+
+@pytest.fixture(autouse=True)
+def _fake_storage() -> None:
+    set_storage(InMemoryStorage())
 
 
 @pytest_asyncio.fixture
