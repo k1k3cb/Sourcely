@@ -29,6 +29,17 @@
 - Similarity = `1 - (embedding <=> query)`.
 - Every chunk stores `embedding_model` so we can migrate models later.
 
+## Retrieval
+- Endpoint `POST /api/v1/query` calls `app.services.retrieval.retrieve()`.
+- The query ALWAYS joins `chunks` to `documents` and filters by
+  `documents.user_id = :user_id`. There is no code path that queries
+  chunks without this filter.
+- The query vector is passed as a string formatted for pgvector:
+  `'[v1,v2,...]'`. SQLAlchemy doesn't auto-bind `list[float>` to the
+  vector type, so we format it ourselves.
+- The query embedding uses `task_type=RETRIEVAL_QUERY` (Gemini) for
+  better recall; the index used `RETRIEVAL_DOCUMENT`.
+
 ## Storage
 - PDFs go to Supabase Storage via `app/services/storage.py`.
 - Bucket is private; clients download via signed URLs.
