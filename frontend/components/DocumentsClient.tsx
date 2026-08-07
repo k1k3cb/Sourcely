@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  api,
   deleteRequest,
   uploadFile,
   type ApiError,
@@ -24,6 +25,8 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-100",
 };
 
+const MAX_BYTES = 20 * 1024 * 1024;
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -32,15 +35,22 @@ function formatBytes(n: number): string {
 
 export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<DocumentRecord[]>(initial);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
-  async function onFile(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  async function handleFile(file: File) {
+    if (file.type !== "application/pdf") {
+      setError("Only PDF files are accepted.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError(`File exceeds the 20 MB limit (${formatBytes(file.size)}).`);
+      return;
+    }
     setError(null);
     setUploading(true);
     setProgress(`Uploading ${file.name}...`);
@@ -64,6 +74,33 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
     }
   }
 
+  function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) void handleFile(file);
+  }
+
+  function onDragOver(e: DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  }
+
+  function onDragLeave(e: DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }
+
+  function onDrop(e: DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
+  }
+
   async function onDelete(id: string) {
     if (!confirm("Delete this document? This cannot be undone.")) return;
     try {
@@ -77,9 +114,7 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
 
   async function refreshOne(id: string) {
     try {
-      const updated = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/documents/${id}`, {
-        credentials: "include",
-      }).then((r) => r.json() as Promise<DocumentRecord>);
+      const updated = await api.get<DocumentRecord>(`/api/v1/documents/${id}`);
       setItems((prev) => prev.map((d) => (d.id === id ? updated : d)));
     } catch {
       // ignore
@@ -88,8 +123,20 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
 
   return (
     <div className="mx-auto mt-8 max-w-3xl space-y-6">
-      <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 p-8 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+      <label
+        onDragOver={onDragOver}
+        onDragEnter={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={
+          "flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-8 transition " +
+          (dragOver
+            ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-900"
+            : "border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900")
+        }
+      >
         <input
+          ref={inputRef}
           type="file"
           accept="application/pdf"
           onChange={onFile}
@@ -98,9 +145,13 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
         />
         <div className="text-center text-sm">
           <div className="font-medium">
-            {uploading ? "Uploading..." : "Click to upload a PDF"}
+            {uploading
+              ? "Uploading…"
+              : dragOver
+                ? "Drop the PDF to upload"
+                : "Drop a PDF here, or click to choose"}
           </div>
-          <div className="mt-1 text-zinc-500">Up to 20 MB</div>
+          <div className="mt-1 text-zinc-500">PDF up to 20 MB</div>
         </div>
       </label>
 

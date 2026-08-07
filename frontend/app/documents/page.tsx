@@ -1,7 +1,5 @@
-import Link from "next/link";
-
+import { AppHeader } from "@/components/AppHeader";
 import { DocumentsClient } from "@/components/DocumentsClient";
-import { LogoutButton } from "@/components/LogoutButton";
 import { api, type DocumentRecord } from "@/lib/api";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
@@ -15,21 +13,7 @@ export default async function DocumentsPage() {
   }
   return (
     <main className="min-h-screen px-6 py-8">
-      <header className="mx-auto flex max-w-3xl items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">Documents</h1>
-          <Link
-            href="/chat"
-            className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Chat
-          </Link>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-zinc-500">{user?.email}</span>
-          <LogoutButton />
-        </div>
-      </header>
+      <AppHeader email={user?.email} active="documents" />
       <DocumentsClient initial={initial} />
     </main>
   );

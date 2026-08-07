@@ -83,3 +83,18 @@ export type DocumentRecord = {
   updated_at: string;
   signed_url?: string | null;
 };
+
+export type QuerySource = {
+  chunk_id: string;
+  document_id: string;
+  filename: string;
+  page_start: number;
+  page_end: number;
+  snippet: string;
+  score: number;
+};
+
+export type QueryResponse = {
+  answer: string;
+  sources: QuerySource[];
+};
