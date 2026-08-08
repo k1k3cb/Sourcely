@@ -4,12 +4,46 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, TypeDecorator
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.document import Document
+
+
+class _VectorOrJSON(TypeDecorator):
+    """TypeDecorator that is Vector(768) on Postgres and JSON-as-Text on others.
+
+    Lets the test suite use sqlite in-memory without bringing up pgvector,
+    while production keeps the native vector type and the HNSW index.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(Vector(768))
+        return dialect.type_descriptor(Text)
+
+    def process_bind_param(self, value, dialect):
+        import json
+
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return value
+        return json.dumps(value)
+
+    def process_result_value(self, value, dialect):
+        import json
+
+        if value is None or dialect.name == "postgresql":
+            return value
+        if isinstance(value, (bytes, bytearray)):
+            value = value.decode("utf-8")
+        return json.loads(value)
 
 
 def _utcnow() -> datetime:
@@ -33,22 +67,13 @@ class Chunk(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(127), nullable=False)
-    embedding: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(_VectorOrJSON(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
 
     document: Mapped[Document] = relationship("Document", lazy="noload")
 
-    __table_args__ = (
-        # HNSW index on the vector column for fast cosine similarity search.
-        # Created via raw SQL in the migration because pgvector's Vector
-        # type doesn't auto-create the index in autogenerate.
-        Index(
-            "ix_chunks_embedding_hnsw",
-            "embedding",
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
-            postgresql_ops={"embedding": "vector_cosine_ops"},
-        ),
-    )
+    # The HNSW index is created in the Alembic migration (see
+    # alembic/versions/..._add_chunks.py). We don't declare it via the
+    # ORM because SQLite doesn't support the postgresql_* arguments.

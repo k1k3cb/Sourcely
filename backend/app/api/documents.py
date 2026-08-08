@@ -113,6 +113,43 @@ async def get_document(
     return out
 
 
+@router.get("/{doc_id}/chunks/{chunk_id}")
+async def get_chunk(
+    doc_id: UUID,
+    chunk_id: UUID,
+    user: CurrentUserDep,
+    session: SessionDep,
+) -> dict:
+    """Return a single chunk, scoped to the user via its parent document.
+
+    Used by the chat UI to highlight the cited fragment when the user
+    clicks a source. The chunk must belong to a document owned by the
+    current user; otherwise 404.
+    """
+    from app.models.chunk import Chunk
+
+    result = await session.execute(
+        select(Chunk)
+        .join(Document, Chunk.document_id == Document.id)
+        .where(
+            Chunk.id == chunk_id,
+            Document.id == doc_id,
+            Document.user_id == user.id,
+        )
+    )
+    chunk = result.scalar_one_or_none()
+    if chunk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return {
+        "id": str(chunk.id),
+        "document_id": str(chunk.document_id),
+        "page_start": chunk.page_start,
+        "page_end": chunk.page_end,
+        "text": chunk.text,
+        "token_count": chunk.token_count,
+    }
+
+
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     doc_id: UUID, user: CurrentUserDep, session: SessionDep, storage: StorageDep

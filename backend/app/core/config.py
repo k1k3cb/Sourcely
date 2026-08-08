@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     llm_provider: Literal["groq", "openai"] = "groq"
     groq_api_key: str = ""
-    groq_model: str = "llama-3.1-70b-versatile"
+    groq_model: str = "llama-3.3-70b-versatile"
 
     max_upload_mb: int = 20
 

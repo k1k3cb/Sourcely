@@ -23,6 +23,21 @@
 - Alternative providers: `openai` (text-embedding-3-small@768) and `ollama` (nomic-embed-text, etc.).
 - `task_type=RETRIEVAL_DOCUMENT` is used at index time; queries will use `RETRIEVAL_QUERY` in Etapa 4.
 
+## LLM
+- Provider: Groq (`llama-3.3-70b-versatile`). Set `GROQ_API_KEY` in `.env`.
+- The service is a thin async wrapper over the Groq HTTP API
+  (httpx streaming) because the official `groq` SDK is sync-only.
+- The system prompt instructs the model to cite sources as
+  `[doc:<filename> page=<n>]` and to refuse answers that aren't in the
+  retrieved context.
+
+## Streaming
+- `POST /api/v1/query/stream` returns `text/event-stream` with three
+  event types: `token` (delta text), `sources` (list of retrieved
+  chunks), and `done`. Errors come as `event: error`.
+- Frontend consumes the stream with `fetch` + `ReadableStream`. See
+  `frontend/lib/api.ts` for the `streamQuery` async generator.
+
 ## pgvector
 - All vector columns are `vector(768)` (locked in).
 - HNSW index with `vector_cosine_ops` for similarity search.

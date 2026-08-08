@@ -9,12 +9,15 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
-from app.db.base import Base, get_session
+from app.db.base import Base, get_session, reset_engine
 from app.main import app
 from app.services.storage import InMemoryStorage, set_storage
 
+# Shared in-memory sqlite. We use aiosqlite's :memory: with
+# StaticPool so all connections see the same DB.
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
@@ -24,6 +27,7 @@ def _override_settings() -> Any:
     settings.database_url = TEST_DB_URL
     settings.jwt_secret = "test-secret"
     settings.cookie_secure = False
+    reset_engine()
     return settings
 
 
@@ -35,7 +39,9 @@ def _fake_storage() -> None:
 @pytest_asyncio.fixture
 async def db_engine():
     engine = create_async_engine(
-        TEST_DB_URL, connect_args={"check_same_thread": False}
+        TEST_DB_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
