@@ -102,41 +102,49 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
     if (file) void handleFile(file);
   }
 
-  async function onDelete(doc: DocumentRecord) {
+  function onDelete(doc: DocumentRecord) {
+    const toastId = toast(
+      `Delete "${doc.filename}"?`,
+      {
+        description: "The document and its chunks will be removed.",
+        duration: Infinity,
+        action: {
+          label: "Delete",
+          onClick: () => {
+            void performDelete(doc, toastId);
+          },
+        },
+        cancel: {
+          label: "Cancel",
+          onClick: () => {
+            toast.dismiss(toastId);
+          },
+        },
+      },
+    );
+  }
+
+  async function performDelete(doc: DocumentRecord, confirmId: string | number) {
+    toast.dismiss(confirmId);
     const previous = items;
     setItems((prev) => prev.filter((d) => d.id !== doc.id));
 
-    const undo = toast.loading(`Deleting ${doc.filename}…`, {
+    const loadingId = toast.loading(`Deleting ${doc.filename}…`, {
       description: "Removing the document and its chunks.",
     });
 
     try {
       await deleteRequest(`/api/v1/documents/${doc.id}`);
       toast.success(`Deleted ${doc.filename}`, {
-        id: undo,
+        id: loadingId,
         description: "The document and its chunks are gone.",
-        action: {
-          label: "Undo",
-          onClick: () => {
-            setItems((prev) => {
-              if (prev.some((d) => d.id === doc.id)) return prev;
-              return [doc, ...prev];
-            });
-            toast.info(
-              "Re-adding a document requires re-uploading the PDF.",
-              {
-                description: "Undo only restores the entry locally.",
-              },
-            );
-          },
-        },
-        duration: 6000,
+        duration: 4000,
       });
     } catch (err) {
       setItems(previous);
       const e = err as ApiError;
       toast.error(`Could not delete ${doc.filename}`, {
-        id: undo,
+        id: loadingId,
         description: e.detail || "The document is still in your list.",
       });
     }
