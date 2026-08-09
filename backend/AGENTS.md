@@ -38,6 +38,17 @@
 - Frontend consumes the stream with `fetch` + `ReadableStream`. See
   `frontend/lib/api.ts` for the `streamQuery` async generator.
 
+## Conversations
+- `Conversation` and `Message` models. Messages have `role`, `content`,
+  and `sources_json` (serialized as JSON; the in-stream payload
+  uses `Source` typed refs).
+- `POST /api/v1/conversations/{id}/messages` persists the user turn
+  up front, streams the LLM response, and persists the assistant
+  turn at the end. The conversation `title` auto-updates from the
+  first user message.
+- All conversation routes scope by `user_id`; cross-user access
+  returns 404.
+
 ## pgvector
 - All vector columns are `vector(768)` (locked in).
 - HNSW index with `vector_cosine_ops` for similarity search.

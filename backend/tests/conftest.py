@@ -61,7 +61,16 @@ async def db_session(db_engine) -> AsyncIterator[AsyncSession]:
 
 
 @pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
+async def client(db_session: AsyncSession, db_engine) -> AsyncIterator[AsyncClient]:
+    # Replace the cached engine in app.db.base with the StaticPool one
+    # so endpoints that use get_session() (e.g. the conversation router
+    # which persists asynchronously after streaming) see the same DB
+    # as the test's db_session.
+    from app.db import base as base_module
+
+    base_module._engine = db_engine
+    base_module._SessionLocal = None  # forces a rebuild bound to db_engine
+
     async def _override_get_session() -> AsyncIterator[AsyncSession]:
         yield db_session
 
@@ -70,3 +79,4 @@ async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+    base_module.reset_engine()

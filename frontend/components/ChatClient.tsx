@@ -1,228 +1,200 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-
 import {
-  streamQuery,
-  type Source,
-  type StreamEvent,
-} from "@/lib/api";
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+
+import { api, type ApiError, type QueryResponse, type Source } from "@/lib/api";
 
 type Message = {
   id: string;
   role: "user" | "assistant";
   text: string;
   sources?: Source[];
-  pending?: boolean;
   error?: string;
 };
 
-function newId() {
-  return Math.random().toString(36).slice(2);
+const SUGGESTIONS = [
+  "What is this document about?",
+  "Summarize the key points.",
+  "List the main conclusions.",
+];
+
+function newId(): string {
+  return Math.random().toString(36).slice(2, 10);
 }
 
-function SourceButton({
+function SourceCard({
   source,
-  onClick,
 }: {
   source: Source;
-  onClick: (s: Source) => void;
 }) {
+  const pageLabel =
+    source.page_start === source.page_end
+      ? `p. ${source.page_start}`
+      : `pp. ${source.page_start}–${source.page_end}`;
+  const scorePct = Math.max(0, Math.min(100, Math.round(source.score * 100)));
   return (
-    <button
-      type="button"
-      onClick={() => onClick(source)}
-      className="block w-full rounded border border-zinc-200 px-3 py-2 text-left text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-    >
-      <div className="font-medium">{source.filename}</div>
-      <div className="text-zinc-500">
-        p.{source.page_start} · score {source.score.toFixed(2)}
+    <li className="rounded-md border border-zinc-200 p-3 text-xs dark:border-zinc-800">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-medium">{source.filename}</span>
+        <span className="shrink-0 text-zinc-500">
+          {pageLabel} · {scorePct}%
+        </span>
       </div>
-      <div className="mt-1 line-clamp-2 text-zinc-600 dark:text-zinc-400">
-        {source.snippet}
-      </div>
-    </button>
+      <p className="mt-2 text-zinc-600 dark:text-zinc-400">{source.snippet}</p>
+    </li>
   );
 }
 
-function CitationPanel({
-  source,
-  onClose,
-}: {
-  source: Source;
-  onClose: () => void;
-}) {
-  return (
-    <div className="mt-2 rounded border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center justify-between">
-        <div className="font-medium">
-          {source.filename}, p.{source.page_start}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          aria-label="Close citation"
-        >
-          x
-        </button>
-      </div>
-      <pre className="mt-2 whitespace-pre-wrap font-sans text-zinc-700 dark:text-zinc-200">
-        {source.snippet}
-      </pre>
-    </div>
-  );
-}
-
-function applyEvent(
-  ev: StreamEvent,
-  assistantId: string,
-  onToken: (delta: string) => void,
-  onSources: (sources: Source[]) => void,
-) {
-  if (ev.type === "token") onToken(ev.t);
-  else if (ev.type === "sources") onSources(ev.sources);
-}
-
-export function ChatClient({ initialQuestion }: { initialQuestion?: string }) {
-  const router = useRouter();
+export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState(initialQuestion ?? "");
+  const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
-  const [activeSource, setActiveSource] = useState<Source | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const question = input.trim();
-    if (!question || pending) return;
-    setError(null);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, pending]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  async function ask(question: string) {
+    const trimmed = question.trim();
+    if (!trimmed || pending) return;
     setInput("");
-
-    const userMsg: Message = { id: newId(), role: "user", text: question };
-    const assistantId = newId();
-    setMessages((prev) => [
-      ...prev,
-      userMsg,
-      { id: assistantId, role: "assistant", text: "", pending: true },
-    ]);
+    const userMsg: Message = { id: newId(), role: "user", text: trimmed };
+    setMessages((prev) => [...prev, userMsg]);
     setPending(true);
-
-    let acc = "";
     try {
-      const stream = streamQuery(question, 5);
-      for await (const ev of stream) {
-        applyEvent(
-          ev,
-          assistantId,
-          (delta) => {
-            acc += delta;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, text: acc, pending: false }
-                  : m,
-              ),
-            );
-          },
-          (srcs) => {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, sources: srcs } : m,
-              ),
-            );
-          },
-        );
-      }
+      const res = await api.post<QueryResponse>("/api/v1/query", {
+        question: trimmed,
+        k: 5,
+      });
+      const assistant: Message = {
+        id: newId(),
+        role: "assistant",
+        text: res.answer,
+        sources: res.sources,
+      };
+      setMessages((prev) => [...prev, assistant]);
     } catch (err) {
-      const detail = (err as { detail?: string }).detail ?? "Request failed";
-      setError(detail);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, text: acc, error: detail, pending: false }
-            : m,
-        ),
-      );
+      const e = err as ApiError;
+      const assistant: Message = {
+        id: newId(),
+        role: "assistant",
+        text: "",
+        error: e.detail || "The query failed. Try again.",
+      };
+      setMessages((prev) => [...prev, assistant]);
     } finally {
       setPending(false);
-      router.refresh();
+    }
+  }
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    void ask(input);
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void ask(input);
     }
   }
 
   return (
-    <div className="mx-auto mt-6 flex max-w-3xl flex-col gap-4">
-      <div className="flex flex-col gap-4">
+    <div className="mx-auto mt-6 flex h-[calc(100vh-9rem)] max-w-3xl flex-col">
+      <div
+        ref={scrollerRef}
+        className="flex-1 space-y-4 overflow-y-auto rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
+      >
         {messages.length === 0 && (
-          <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
-            Ask anything about your uploaded documents. Answers cite the
-            source page.
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <p className="text-sm text-zinc-500">
+              Ask a question about your uploaded documents.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => ask(s)}
+                  disabled={pending}
+                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
         {messages.map((m) => (
-          <div
+          <article
             key={m.id}
             className={
               m.role === "user"
-                ? "self-end max-w-[80%] rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "self-start max-w-[90%] rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                ? "ml-auto max-w-[80%] rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "mr-auto max-w-[90%] space-y-2 text-sm"
             }
           >
-            <div className="whitespace-pre-wrap">
-              {m.text || (m.pending ? "Thinking..." : "")}
-            </div>
-            {m.error && (
-              <div className="mt-2 text-xs text-red-600 dark:text-red-400">
-                {m.error}
-              </div>
+            {m.role === "user" ? (
+              <p className="whitespace-pre-wrap">{m.text}</p>
+            ) : m.error ? (
+              <p className="text-red-600 dark:text-red-400">{m.error}</p>
+            ) : (
+              <>
+                <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-200">
+                  {m.text}
+                </p>
+                {m.sources && m.sources.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {m.sources.map((s) => (
+                      <SourceCard key={s.chunk_id} source={s} />
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
-            {m.sources && m.sources.length > 0 && (
-              <div className="mt-3 flex flex-col gap-2">
-                <div className="text-xs font-medium text-zinc-500">
-                  Sources ({m.sources.length})
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {m.sources.map((s) => (
-                    <SourceButton
-                      key={s.chunk_id}
-                      source={s}
-                      onClick={setActiveSource}
-                    />
-                  ))}
-                </div>
-                {activeSource &&
-                  m.sources.some(
-                    (s) => s.chunk_id === activeSource.chunk_id,
-                  ) && (
-                    <CitationPanel
-                      source={activeSource}
-                      onClose={() => setActiveSource(null)}
-                    />
-                  )}
-              </div>
-            )}
-          </div>
+          </article>
         ))}
+
+        {pending && (
+          <p className="text-xs text-zinc-500">Searching your documents…</p>
+        )}
       </div>
-      {error && (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
-      <form onSubmit={onSubmit} className="flex gap-2">
-        <input
-          type="text"
+
+      <form
+        onSubmit={onSubmit}
+        className="mt-3 flex items-end gap-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800"
+      >
+        <textarea
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question..."
+          onKeyDown={onKeyDown}
+          placeholder="Ask a question…"
+          rows={1}
           disabled={pending}
-          className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900"
+          className="flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-zinc-400"
         />
         <button
           type="submit"
           disabled={pending || !input.trim()}
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
         >
-          {pending ? "Sending..." : "Send"}
+          {pending ? "Sending…" : "Send"}
         </button>
       </form>
     </div>
