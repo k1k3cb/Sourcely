@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import {
   api,
@@ -101,14 +102,43 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
     if (file) void handleFile(file);
   }
 
-  async function onDelete(id: string) {
-    if (!confirm("Delete this document? This cannot be undone.")) return;
+  async function onDelete(doc: DocumentRecord) {
+    const previous = items;
+    setItems((prev) => prev.filter((d) => d.id !== doc.id));
+
+    const undo = toast.loading(`Deleting ${doc.filename}…`, {
+      description: "Removing the document and its chunks.",
+    });
+
     try {
-      await deleteRequest(`/api/v1/documents/${id}`);
-      setItems((prev) => prev.filter((d) => d.id !== id));
+      await deleteRequest(`/api/v1/documents/${doc.id}`);
+      toast.success(`Deleted ${doc.filename}`, {
+        id: undo,
+        description: "The document and its chunks are gone.",
+        action: {
+          label: "Undo",
+          onClick: () => {
+            setItems((prev) => {
+              if (prev.some((d) => d.id === doc.id)) return prev;
+              return [doc, ...prev];
+            });
+            toast.info(
+              "Re-adding a document requires re-uploading the PDF.",
+              {
+                description: "Undo only restores the entry locally.",
+              },
+            );
+          },
+        },
+        duration: 6000,
+      });
     } catch (err) {
+      setItems(previous);
       const e = err as ApiError;
-      setError(e.detail || "Delete failed");
+      toast.error(`Could not delete ${doc.filename}`, {
+        id: undo,
+        description: e.detail || "The document is still in your list.",
+      });
     }
   }
 
@@ -203,7 +233,7 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
               )}
               <button
                 type="button"
-                onClick={() => onDelete(d.id)}
+                onClick={() => onDelete(d)}
                 className="rounded border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950"
               >
                 Delete

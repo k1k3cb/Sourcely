@@ -1,13 +1,14 @@
 import { AppHeader } from "@/components/AppHeader";
 import { DocumentsClient } from "@/components/DocumentsClient";
-import { api, type DocumentRecord } from "@/lib/api";
+import { apiServerFetch } from "@/lib/auth";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import type { DocumentRecord } from "@/lib/api";
 
 export default async function DocumentsPage() {
   const user = await getCurrentUserFromCookies();
   let initial: DocumentRecord[] = [];
   try {
-    initial = await api.get<DocumentRecord[]>("/api/v1/documents");
+    initial = await apiServerFetch<DocumentRecord[]>("/api/v1/documents");
   } catch {
     // empty list on error
   }
