@@ -82,24 +82,42 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
   const [dragOver, setDragOver] = useState(false);
 
   async function handleFile(file: File) {
-    if (file.type !== "application/pdf") {
-      setError("Only PDF files are accepted.");
+    const kind = fileKind(file.type);
+    if (kind === "other") {
+      setError(
+        `Unsupported file type. Accepted: PDF, mp3, wav, m4a, flac, ogg, mp4, webm, mov.`,
+      );
       return;
     }
-    if (file.size > MAX_BYTES) {
-      setError(`File exceeds the 20 MB limit (${formatBytes(file.size)}).`);
+
+    const limit =
+      kind === "pdf" ? MAX_BYTES : MAX_AUDIO_BYTES;
+    const limitLabel = kind === "pdf" ? "20 MB" : "200 MB";
+    if (file.size > limit) {
+      setError(
+        `${file.name} exceeds the ${limitLabel} limit (${formatBytes(file.size)}).`,
+      );
       return;
     }
+
     setError(null);
     setUploading(true);
-    setProgress(`Uploading ${file.name}...`);
+    setProgress(
+      kind === "pdf"
+        ? `Uploading ${file.name}...`
+        : `Uploading ${file.name}... Transcription can take a moment.`,
+    );
     try {
       const created = await uploadFile<DocumentRecord>(
         "/api/v1/documents/upload",
         file,
       );
       setItems((prev) => [created, ...prev]);
-      setProgress("Uploaded. Indexing in background...");
+      setProgress(
+        kind === "pdf"
+          ? "Uploaded. Indexing in background..."
+          : "Uploaded. Transcribing in background...",
+      );
       setTimeout(() => {
         setProgress(null);
         router.refresh();

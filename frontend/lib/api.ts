@@ -89,12 +89,12 @@ export type Source = {
   chunk_id: string;
   document_id: string;
   filename: string;
+  snippet: string;
+  score: number;
   page_start: number | null;
   page_end: number | null;
   start_seconds: number | null;
   end_seconds: number | null;
-  snippet: string;
-  score: number;
 };
 
 export type QueryResponse = {

@@ -12,12 +12,14 @@ class Source(BaseModel):
     chunk_id: UUID
     document_id: UUID
     filename: str
-    page_start: int
-    page_end: int
     snippet: str
     score: float
+    page_start: int | None = None
+    page_end: int | None = None
+    start_seconds: float | None = None
+    end_seconds: float | None = None
 
 
 class QueryResponse(BaseModel):
     answer: str
-    sources: list[Source]
+    sources: list[Source]  

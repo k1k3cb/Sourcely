@@ -101,11 +101,21 @@ export function ChatClient() {
       setMessages((prev) => [...prev, assistant]);
     } catch (err) {
       const e = err as ApiError;
+      if (e && typeof e.status === "number") {
+        console.error("[chat] query failed", e.status, e.detail);
+      } else {
+        console.error("[chat] query failed", err);
+      }
+      const detail =
+        (e && typeof e.detail === "string" && e.detail) ||
+        (e && typeof e.status === "number"
+          ? `Request failed (${e.status}).`
+          : "Network error. Is the backend running on :8000?");
       const assistant: Message = {
         id: newId(),
         role: "assistant",
         text: "",
-        error: e.detail || "The query failed. Try again.",
+        error: detail,
       };
       setMessages((prev) => [...prev, assistant]);
     } finally {
