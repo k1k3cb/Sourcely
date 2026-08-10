@@ -12,6 +12,8 @@ class Source(BaseModel):
     chunk_id: UUID
     document_id: UUID
     filename: str
+    mime_type: str
+    document_url: str | None = None
     snippet: str
     score: float
     index: int | None = None

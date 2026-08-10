@@ -89,18 +89,104 @@ export type Source = {
   chunk_id: string;
   document_id: string;
   filename: string;
+  mime_type: string;
+  document_url: string | null;
   snippet: string;
   score: number;
+  index: number | null;
   page_start: number | null;
   page_end: number | null;
   start_seconds: number | null;
   end_seconds: number | null;
+  text?: string | null;
 };
 
 export type QueryResponse = {
   answer: string;
   sources: Source[];
 };
+
+export type StreamEvent =
+  | { type: "token"; t: string }
+  | { type: "sources"; sources: Source[] }
+  | { type: "done" }
+  | { type: "error"; detail: string };
+
+export async function* streamQuery(
+  question: string,
+  k = 5,
+): AsyncGenerator<StreamEvent> {
+  const res = await fetch(`${API_URL}/api/v1/query/stream`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, k }),
+  });
+  if (!res.ok || !res.body) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // ignore
+    }
+    throw { status: res.status, detail } satisfies ApiError;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const ev = parseSseBlock(block);
+      if (ev) yield ev;
+    }
+  }
+}
+
+function parseSseBlock(block: string): StreamEvent | null {
+  let event = "message";
+  let data = "";
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event: ")) event = line.slice(7).trim();
+    else if (line.startsWith("data: ")) data += line.slice(6);
+  }
+  if (!data) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  const p = parsed as Record<string, unknown>;
+  if (event === "token" && typeof p.t === "string") {
+    return { type: "token", t: p.t };
+  }
+  if (event === "sources") {
+    const sources = (p.sources as Source[]) ?? [];
+    return { type: "sources", sources };
+  }
+  if (event === "done") return { type: "done" };
+  if (event === "error") {
+    return { type: "error", detail: String(p.detail ?? "Unknown error") };
+  }
+  return null;
+}
+
+export async function getChunkText(
+  documentId: string,
+  chunkId: string,
+): Promise<string> {
+  const res = await apiFetch<{ text: string }>(
+    `/api/v1/documents/${documentId}/chunks/${chunkId}`,
+  );
+  return res.text;
+}
 
 /** Format a number of seconds as m:ss or h:mm:ss. Returns null for null. */
 export function formatTimestamp(
