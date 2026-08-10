@@ -103,12 +103,14 @@ function SourceCard({
   source,
   question,
   onSeekAudio,
+  onStopAudio,
   activeAudioId,
   textOverride,
 }: {
   source: Source;
   question?: string;
   onSeekAudio: (source: Source) => void;
+  onStopAudio: () => void;
   activeAudioId?: string | null;
   textOverride?: string | null;
 }) {
@@ -153,18 +155,25 @@ function SourceCard({
       </p>
       <div className="mt-2 flex items-center gap-2">
         {audio && source.start_seconds != null && (
-          <button
-            type="button"
-            onClick={() => onSeekAudio(source)}
-            className={
-              "rounded border px-2 py-0.5 text-[11px] font-medium transition " +
-              (isPlaying
-                ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
-                : "border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900")
-            }
-          >
-            {isPlaying ? "▶ playing" : `↳ jump to ${formatTimestamp(source.start_seconds)}`}
-          </button>
+          <>
+            {isPlaying ? (
+              <button
+                type="button"
+                onClick={onStopAudio}
+                className="rounded border border-red-500 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
+              >
+                ■ stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSeekAudio(source)}
+                className="rounded border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                ↳ jump to {formatTimestamp(source.start_seconds)}
+              </button>
+            )}
+          </>
         )}
         {!audio && source.document_url && source.page_start != null && (
           <button
@@ -282,6 +291,15 @@ export function ChatClient() {
     setActiveAudioId(source.chunk_id);
   }
 
+  function onStopAudio() {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setActiveAudioId(null);
+  }
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     void ask(input);
@@ -353,6 +371,7 @@ export function ChatClient() {
                         source={s}
                         question={m.question}
                         onSeekAudio={onSeekAudio}
+                        onStopAudio={onStopAudio}
                         activeAudioId={activeAudioId}
                         textOverride={s.text ?? null}
                       />
