@@ -187,7 +187,7 @@ def test_index_document_no_text_marks_failed(fake_dependencies, sqlite_sync_db):
             select(Document).where(Document.id == doc_id)
         ).scalar_one()
         assert doc.status == DocumentStatus.failed
-        assert "No extractable text" in (doc.error_message or "")
+        assert "No chunks produced" in (doc.error_message or "")
 
 
 def test_index_document_already_ready_skips(fake_dependencies, sqlite_sync_db):

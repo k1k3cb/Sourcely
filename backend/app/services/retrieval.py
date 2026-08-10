@@ -17,10 +17,14 @@ class RetrievedChunk:
     chunk_id: UUID
     document_id: UUID
     filename: str
-    page_start: int
-    page_end: int
     text: str
     score: float
+    # PDF-only
+    page_start: int | None = None
+    page_end: int | None = None
+    # Audio/video-only
+    start_seconds: float | None = None
+    end_seconds: float | None = None
 
 
 async def retrieve(
@@ -58,6 +62,8 @@ async def retrieve(
             d.filename,
             c.page_start,
             c.page_end,
+            c.start_seconds,
+            c.end_seconds,
             c.text,
             1 - (c.embedding <=> CAST(:q_vec AS vector)) as score
         from chunks c
@@ -87,6 +93,8 @@ async def retrieve(
             filename=r["filename"],
             page_start=r["page_start"],
             page_end=r["page_end"],
+            start_seconds=r["start_seconds"],
+            end_seconds=r["end_seconds"],
             text=r["text"],
             score=float(r["score"]),
         )

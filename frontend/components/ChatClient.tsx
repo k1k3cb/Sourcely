@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import { api, type ApiError, type QueryResponse, type Source } from "@/lib/api";
+import { api, formatTimestamp, isAudioSource, type ApiError, type QueryResponse, type Source } from "@/lib/api";
 
 type Message = {
   id: string;
@@ -28,22 +28,34 @@ function newId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function sourceLocationLabel(source: Source): string {
+  if (isAudioSource(source)) {
+    const start = formatTimestamp(source.start_seconds);
+    const end = formatTimestamp(source.end_seconds);
+    if (start && end) return `${start} – ${end}`;
+    if (start) return `${start}`;
+  }
+  if (source.page_start != null) {
+    return source.page_start === source.page_end
+      ? `p. ${source.page_start}`
+      : `pp. ${source.page_start}–${source.page_end}`;
+  }
+  return "";
+}
+
 function SourceCard({
   source,
 }: {
   source: Source;
 }) {
-  const pageLabel =
-    source.page_start === source.page_end
-      ? `p. ${source.page_start}`
-      : `pp. ${source.page_start}–${source.page_end}`;
+  const locationLabel = sourceLocationLabel(source);
   const scorePct = Math.max(0, Math.min(100, Math.round(source.score * 100)));
   return (
     <li className="rounded-md border border-zinc-200 p-3 text-xs dark:border-zinc-800">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-medium">{source.filename}</span>
         <span className="shrink-0 text-zinc-500">
-          {pageLabel} · {scorePct}%
+          {locationLabel} · {scorePct}%
         </span>
       </div>
       <p className="mt-2 text-zinc-600 dark:text-zinc-400">{source.snippet}</p>

@@ -3,8 +3,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.document import DocumentStatus
-
 
 class DocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -14,7 +12,8 @@ class DocumentOut(BaseModel):
     mime_type: str
     size_bytes: int
     page_count: int | None
-    status: DocumentStatus
+    duration_seconds: float | None
+    status: str
     error_message: str | None
     created_at: datetime
     updated_at: datetime

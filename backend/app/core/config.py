@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
 
     max_upload_mb: int = 20
+    max_audio_mb: int = 200
+
+    # Whisper transcription. "tiny" / "base" / "small" / "medium" /
+    # "large-v3". "small" gives good Spanish accuracy at a reasonable
+    # CPU cost for a portfolio. Set WHISPER_MODEL in .env to override.
+    whisper_model: str = "small"
+    whisper_device: str = "cpu"
+    whisper_compute_type: str = "int8"
 
     cookie_secure: bool = Field(default=False)
 
@@ -50,6 +58,10 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def max_audio_bytes(self) -> int:
+        return self.max_audio_mb * 1024 * 1024
 
 
 @lru_cache(maxsize=1)

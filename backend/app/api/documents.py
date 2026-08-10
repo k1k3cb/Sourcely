@@ -22,7 +22,13 @@ from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.schemas.document import DocumentOut, DocumentWithUrl
 from app.services.storage import StorageBackend, get_storage
-from app.services.validation import is_pdf
+from app.services.validation import (
+    ACCEPTED_MIMES,
+    DetectedFile,
+    FileKind,
+    detect_kind,
+    normalize_mime,
+)
 from app.tasks.indexing import index_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -41,38 +47,64 @@ StorageDep = Annotated[StorageBackend, Depends(get_storage)]
 )
 async def upload_document(
     background_tasks: BackgroundTasks,
-    file: Annotated[UploadFile, File(description="PDF file to upload")],
+    file: Annotated[UploadFile, File(description="PDF or audio file to upload")],
     user: CurrentUserDep,
     session: SessionDep,
     storage: StorageDep,
 ) -> Document:
-    if file.content_type not in ("application/pdf", "application/x-pdf"):
+    # 1. Reject the declared MIME early if it isn't even a candidate.
+    declared = (file.content_type or "").lower()
+    if declared and declared not in ACCEPTED_MIMES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Only application/pdf is accepted",
+            detail=f"Unsupported file type: {declared!r}",
         )
 
     data = await file.read()
-    if len(data) > settings.max_upload_bytes:
+    if not data:
         raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"File exceeds maximum size of {settings.max_upload_mb} MB",
-        )
-    if not is_pdf(data):
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="File is not a valid PDF (magic bytes mismatch)",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file",
         )
 
-    safe_name = file.filename or "document.pdf"
+    # 2. Detect the file kind from magic bytes. This is the source of
+    # truth; the declared MIME is only a hint used when ambiguous.
+    detected: DetectedFile | None = detect_kind(data, declared)
+    if detected is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="File is not a recognized PDF, audio, or video format",
+        )
+    if detected.kind == FileKind.unknown:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="File type not supported",
+        )
+
+    # 3. Size limit depends on kind: PDFs are 20 MB, audio/video 200 MB.
+    if detected.kind == FileKind.pdf:
+        if len(data) > settings.max_upload_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"File exceeds maximum size of {settings.max_upload_mb} MB",
+            )
+    else:
+        if len(data) > settings.max_audio_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"File exceeds maximum size of {settings.max_audio_mb} MB",
+            )
+
+    mime_type = normalize_mime(declared, detected)
+    safe_name = file.filename or f"document.{detected.extension}"
     storage_path = f"{user.id}/{uuid4()}-{safe_name[:200]}"
-    storage.upload(storage_path, data, "application/pdf")
+    storage.upload(storage_path, data, mime_type)
 
     doc = Document(
         user_id=user.id,
         filename=safe_name,
         storage_path=storage_path,
-        mime_type="application/pdf",
+        mime_type=mime_type,
         size_bytes=len(data),
         status=DocumentStatus.uploaded,
     )
@@ -125,6 +157,10 @@ async def get_chunk(
     Used by the chat UI to highlight the cited fragment when the user
     clicks a source. The chunk must belong to a document owned by the
     current user; otherwise 404.
+
+    The response includes whichever location fields apply: page_start
+    and page_end for PDFs, start_seconds and end_seconds for
+    audio/video.
     """
     from app.models.chunk import Chunk
 
@@ -145,6 +181,8 @@ async def get_chunk(
         "document_id": str(chunk.document_id),
         "page_start": chunk.page_start,
         "page_end": chunk.page_end,
+        "start_seconds": chunk.start_seconds,
+        "end_seconds": chunk.end_seconds,
         "text": chunk.text,
         "token_count": chunk.token_count,
     }

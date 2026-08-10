@@ -27,11 +27,49 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 200 * 1024 * 1024;
+
+const ACCEPTED_TYPES = [
+  "application/pdf",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/x-m4a",
+  "audio/m4a",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/flac",
+  "audio/webm",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+];
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDuration(seconds: number | null | undefined): string | null {
+  if (seconds == null) return null;
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+  return `${m}:${pad(sec)}`;
+}
+
+function fileKind(mime: string | null | undefined): "pdf" | "audio" | "video" | "other" {
+  if (!mime) return "other";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  return "other";
 }
 
 export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
@@ -176,7 +214,7 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf"
+          accept={ACCEPTED_TYPES.join(",")}
           onChange={onFile}
           disabled={uploading}
           className="hidden"
@@ -186,10 +224,12 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
             {uploading
               ? "Uploading…"
               : dragOver
-                ? "Drop the PDF to upload"
-                : "Drop a PDF here, or click to choose"}
+                ? "Drop the file to upload"
+                : "Drop a PDF or audio file here, or click to choose"}
           </div>
-          <div className="mt-1 text-zinc-500">PDF up to 20 MB</div>
+          <div className="mt-1 text-zinc-500">
+            PDF up to 20 MB · audio/video up to 200 MB
+          </div>
         </div>
       </label>
 
@@ -209,9 +249,37 @@ export function DocumentsClient({ initial }: { initial: DocumentRecord[] }) {
         {items.map((d) => (
           <li key={d.id} className="flex items-center justify-between p-4">
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium">{d.filename}</div>
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium">{d.filename}</span>
+                <span
+                  className={
+                    "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase " +
+                    (fileKind(d.mime_type) === "pdf"
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                      : fileKind(d.mime_type) === "audio"
+                        ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+                        : fileKind(d.mime_type) === "video"
+                          ? "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-200"
+                          : "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200")
+                  }
+                >
+                  {fileKind(d.mime_type)}
+                </span>
+              </div>
               <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500">
                 <span>{formatBytes(d.size_bytes)}</span>
+                {d.page_count != null && (
+                  <>
+                    <span>·</span>
+                    <span>{d.page_count} pages</span>
+                  </>
+                )}
+                {d.duration_seconds != null && (
+                  <>
+                    <span>·</span>
+                    <span>{formatDuration(d.duration_seconds)}</span>
+                  </>
+                )}
                 <span>·</span>
                 <span>{new Date(d.created_at).toLocaleDateString()}</span>
                 {d.error_message && (

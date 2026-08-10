@@ -18,10 +18,10 @@ class _StorageLike(Protocol):
     def download(self, path: str) -> bytes: ...
 
 
-# A dedicated sync engine for background tasks. We use psycopg (sync) here
+# A dedicated sync engine for background tasks. We use psycopg (sync)
 # so the task does not have to share a loop with the main app. In a
-# production setup this would be replaced with a real worker (Celery, RQ,
-# Arq, etc.).
+# production setup this would be replaced with a real worker (Celery,
+# RQ, Arq, etc.).
 _sync_engine: Engine | None = None
 _SyncSessionLocal = None
 
@@ -40,19 +40,16 @@ def _get_sync_engine():
 
 
 def set_sync_engine(engine: Engine, session_factory) -> None:
-    """Test hook: replace the sync engine + sessionmaker used by the task.
-
-    In production, the engine is built from settings.database_url. In
-    tests, callers can pass a SQLite engine to avoid needing pgvector.
-    """
     global _sync_engine, _SyncSessionLocal
     _sync_engine = engine
     _SyncSessionLocal = session_factory
 
 
-# Allow tests to swap storage/embeddings without booting the real ones.
+# Allow tests to swap storage/embeddings/transcriber without booting
+# the real ones.
 _storage_override: _StorageLike | None = None
 _embeddings_override = None  # duck-typed: embed_texts(Sequence[str]) -> list[list[float]]
+_transcriber_override = None  # duck-typed: transcribe(bytes, str) -> list[TimeSegment]
 
 
 def set_storage_for_tasks(backend: _StorageLike) -> None:
@@ -65,23 +62,35 @@ def set_embeddings_for_tasks(backend) -> None:  # noqa: ANN001
     _embeddings_override = backend
 
 
-def index_document(document_id: UUID) -> None:
-    """Index a document: extract text, chunk, embed, persist.
+def set_transcriber_for_tasks(backend) -> None:  # noqa: ANN001
+    global _transcriber_override
+    _transcriber_override = backend
 
-    Pipeline:
-      1. Load Document and flip status to processing.
-      2. Download bytes from storage.
-      3. Extract text per page (pypdf).
-      4. Chunk per page with tiktoken (500/80).
-      5. Embed chunks in batches (OpenAI text-embedding-3-small @ 768).
-      6. Insert Chunk rows, update page_count, flip to ready.
+
+def index_document(document_id: UUID) -> None:
+    """Index a document: detect kind, extract, chunk, embed, persist.
+
+    Supports PDFs (extracted with pypdf) and audio/video (transcribed
+    with the configured transcriber). PDF chunks are anchored to pages;
+    audio/video chunks are anchored to time ranges in seconds. Both
+    share the same embeddings + retrieval pipeline.
     """
     from app.models.chunk import Chunk
     from app.models.document import Document, DocumentStatus
-    from app.services.chunking import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, chunk_pages
+    from app.services.chunking import (
+        DEFAULT_CHUNK_OVERLAP,
+        DEFAULT_CHUNK_SIZE,
+        chunk_segments,
+    )
     from app.services.embeddings import get_embeddings
-    from app.services.ingestion import PdfExtractionError, extract_pages
+    from app.services.ingestion import (
+        AudioExtractionError,
+        PdfExtractionError,
+        extract,
+    )
     from app.services.storage import get_storage
+    from app.services.transcription import get_transcriber
+    from app.services.validation import FileKind, detect_kind
 
     logger.info("index_document: starting for %s", document_id)
     SessionLocal = _get_sync_engine()
@@ -104,20 +113,43 @@ def index_document(document_id: UUID) -> None:
         doc.status = DocumentStatus.processing
         session.commit()
 
-        # Download + extract
+        # Download
         storage = _storage_override or get_storage()
         data = storage.download(doc.storage_path)
-        pages = extract_pages(data)
-        doc.page_count = len(pages)
+        if not data:
+            raise PdfExtractionError("Downloaded file is empty")
+
+        # Detect kind (use the mime we already stored, but also re-detect
+        # from bytes to be safe).
+        detected = detect_kind(data, doc.mime_type)
+        if detected is None or detected.kind == FileKind.unknown:
+            raise PdfExtractionError(
+                f"Could not detect file kind from bytes (mime={doc.mime_type!r})"
+            )
+
+        # Extract
+        segments = extract(data, detected)
+        if not segments:
+            raise PdfExtractionError("No content extracted from document")
+
+        # Update document-level metadata
+        from app.services.ingestion import PageSegment, TimeSegment
+        pages = [s for s in segments if isinstance(s, PageSegment)]
+        time_segs = [s for s in segments if isinstance(s, TimeSegment)]
+        if pages:
+            doc.page_count = len(pages)
+        if time_segs:
+            last = time_segs[-1]
+            doc.duration_seconds = last.end_seconds
 
         # Chunk
-        chunks = chunk_pages(
-            pages,
+        chunks = chunk_segments(
+            segments,
             chunk_size=DEFAULT_CHUNK_SIZE,
             chunk_overlap=DEFAULT_CHUNK_OVERLAP,
         )
         if not chunks:
-            raise PdfExtractionError("No extractable text in document")
+            raise PdfExtractionError("No chunks produced from document")
 
         # Embed
         embeddings_backend = _embeddings_override or get_embeddings()
@@ -129,23 +161,25 @@ def index_document(document_id: UUID) -> None:
 
         # Persist
         for chunk, vec in zip(chunks, vectors):
-            session.add(
-                Chunk(
-                    document_id=doc.id,
-                    page_start=chunk.page_start,
-                    page_end=chunk.page_end,
-                    text=chunk.text,
-                    token_count=chunk.token_count,
-                    embedding_model=embeddings_backend.model,
-                    embedding=vec,
-                )
+            row = Chunk(
+                document_id=doc.id,
+                text=chunk.text,
+                token_count=chunk.token_count,
+                embedding_model=embeddings_backend.model,
+                embedding=vec,
             )
+            if chunk.page_start is not None:
+                row.page_start = chunk.page_start
+                row.page_end = chunk.page_end
+            if chunk.start_seconds is not None:
+                row.start_seconds = chunk.start_seconds
+                row.end_seconds = chunk.end_seconds
+            session.add(row)
         doc.status = DocumentStatus.ready
         session.commit()
         logger.info(
-            "index_document: %s ready (%d pages, %d chunks)",
+            "index_document: %s ready (%d chunks)",
             document_id,
-            doc.page_count,
             len(chunks),
         )
     except Exception as exc:  # noqa: BLE001

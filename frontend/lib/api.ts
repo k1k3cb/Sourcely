@@ -77,6 +77,7 @@ export type DocumentRecord = {
   mime_type: string;
   size_bytes: number;
   page_count: number | null;
+  duration_seconds: number | null;
   status: DocumentStatus;
   error_message: string | null;
   created_at: string;
@@ -88,8 +89,10 @@ export type Source = {
   chunk_id: string;
   document_id: string;
   filename: string;
-  page_start: number;
-  page_end: number;
+  page_start: number | null;
+  page_end: number | null;
+  start_seconds: number | null;
+  end_seconds: number | null;
   snippet: string;
   score: number;
 };
@@ -98,3 +101,22 @@ export type QueryResponse = {
   answer: string;
   sources: Source[];
 };
+
+/** Format a number of seconds as m:ss or h:mm:ss. Returns null for null. */
+export function formatTimestamp(
+  totalSeconds: number | null | undefined,
+): string | null {
+  if (totalSeconds == null) return null;
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+  return `${m}:${pad(sec)}`;
+}
+
+/** Heuristic: is this source pointing at an audio/video chunk vs a PDF? */
+export function isAudioSource(s: Source): boolean {
+  return s.start_seconds != null && s.end_seconds != null;
+}

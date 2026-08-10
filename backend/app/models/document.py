@@ -38,6 +38,8 @@ class Document(Base):
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(127), nullable=False)
+    # Duration in seconds for audio/video documents. NULL for PDFs.
+    duration_seconds: Mapped[float | None] = mapped_column(nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[DocumentStatus] = mapped_column(

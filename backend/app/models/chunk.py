@@ -4,7 +4,15 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, TypeDecorator
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,7 +21,7 @@ from app.models.document import Document
 
 
 class _VectorOrJSON(TypeDecorator):
-    """TypeDecorator that is Vector(768) on Postgres and JSON-as-Text on others.
+    """Vector(768) on Postgres, JSON-as-Text on others.
 
     Lets the test suite use sqlite in-memory without bringing up pgvector,
     while production keeps the native vector type and the HNSW index.
@@ -62,8 +70,12 @@ class Chunk(Base):
         nullable=False,
         index=True,
     )
-    page_start: Mapped[int] = mapped_column(Integer, nullable=False)
-    page_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    # PDF-only fields. NULL for audio/video chunks.
+    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Audio/video fields. NULL for PDF chunks.
+    start_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    end_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(127), nullable=False)
@@ -74,6 +86,4 @@ class Chunk(Base):
 
     document: Mapped[Document] = relationship("Document", lazy="noload")
 
-    # The HNSW index is created in the Alembic migration (see
-    # alembic/versions/..._add_chunks.py). We don't declare it via the
-    # ORM because SQLite doesn't support the postgresql_* arguments.
+    # HNSW index is created in the Alembic migration.

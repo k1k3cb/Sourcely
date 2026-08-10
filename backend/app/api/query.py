@@ -38,6 +38,8 @@ def _format_source(chunk: RetrievedChunk) -> Source:
         filename=chunk.filename,
         page_start=chunk.page_start,
         page_end=chunk.page_end,
+        start_seconds=chunk.start_seconds,
+        end_seconds=chunk.end_seconds,
         snippet=_snippet(chunk.text),
         score=chunk.score,
     )
