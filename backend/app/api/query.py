@@ -31,7 +31,7 @@ def _snippet(text: str, max_chars: int = 240) -> str:
     return text[: max_chars - 1].rstrip() + "\u2026"
 
 
-def _format_source(chunk: RetrievedChunk) -> Source:
+def _format_source(chunk: RetrievedChunk, index: int) -> Source:
     return Source(
         chunk_id=chunk.chunk_id,
         document_id=chunk.document_id,
@@ -42,6 +42,7 @@ def _format_source(chunk: RetrievedChunk) -> Source:
         end_seconds=chunk.end_seconds,
         snippet=_snippet(chunk.text),
         score=chunk.score,
+        index=index,
     )
 
 
@@ -52,15 +53,26 @@ async def query(
     chunks = await retrieve(
         session=session, user_id=user.id, question=payload.question, k=payload.k
     )
-    sources = [_format_source(c) for c in chunks]
-    if not sources:
-        answer = (
-            "No relevant documents found. Upload some PDFs first, or "
-            "rephrase the question."
+    sources = [_format_source(c, i) for i, c in enumerate(chunks, start=1)]
+    if not chunks:
+        return QueryResponse(
+            answer=(
+                "No relevant documents found. Upload some PDFs first, or "
+                "rephrase the question."
+            ),
+            sources=sources,
         )
-    else:
+
+    user_prompt = build_user_prompt(payload.question, chunks)
+    try:
+        answer = get_llm().complete(SYSTEM_PROMPT, user_prompt)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("LLM completion failed: %s", exc)
+        answer = ""
+    if not answer:
         answer = (
-            f"Found {len(sources)} relevant chunk(s) across your documents."
+            f"Found {len(chunks)} relevant passage(s) in your documents, "
+            "but I couldn't synthesize an answer right now. See the snippets below."
         )
     return QueryResponse(answer=answer, sources=sources)
 
@@ -84,7 +96,7 @@ async def _answer_stream(
         logger.exception("LLM streaming failed: %s", exc)
         yield _sse("error", {"detail": str(exc)})
         return
-    sources = [_format_source(c) for c in chunks]
+    sources = [_format_source(c, i) for i, c in enumerate(chunks, start=1)]
     yield _sse("sources", {"sources": [s.model_dump(mode="json") for s in sources]})
     yield _sse("done", {})
 

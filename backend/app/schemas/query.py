@@ -14,6 +14,7 @@ class Source(BaseModel):
     filename: str
     snippet: str
     score: float
+    index: int | None = None
     page_start: int | None = None
     page_end: int | None = None
     start_seconds: float | None = None

@@ -1,55 +1,41 @@
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import AsyncIterator, Sequence
-from typing import Protocol
 
-import httpx
+from groq import Groq
+from openai import OpenAI
 
 from app.core.config import get_settings
-from app.services.retrieval import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
 SYSTEM_PROMPT = (
-    "You are a precise assistant that answers questions about a user's "
-    "uploaded documents.\n\n"
-    "Rules:\n"
-    "1. Use ONLY the context provided below. If the answer is not in the "
-    "context, say so explicitly.\n"
-    "2. Cite the source for every fact using the format "
-    "[doc:filename page=<n>]. The page number must match the page the "
-    "fact came from.\n"
-    "3. Be concise. Prefer short, direct answers.\n"
-    "4. Do not invent filenames, page numbers, or facts."
+    "You are a precise assistant that answers questions strictly from the "
+    "provided context. If the answer is not in the context, say you don't "
+    "know — do not make anything up. Reply in the user's language. Cite "
+    "the sources you used by their bracketed numbers, e.g. [1], [2]. "
+    "Keep the answer concise."
 )
 
 
-class LLMBackend(Protocol):
+class LLMBackend:
     model: str
+
+    def complete(self, system: str, user: str, max_tokens: int = 800) -> str:
+        raise NotImplementedError
 
     async def stream(
-        self,
-        system: str,
-        user: str,
-        *,
-        temperature: float = 0.2,
-        max_tokens: int = 600,
-    ) -> AsyncIterator[str]: ...
+        self, system: str, user: str, max_tokens: int = 800
+    ) -> AsyncIterator[str]:
+        # Default: block-then-yield. Subclasses can override with native SSE.
+        yield self.complete(system, user, max_tokens=max_tokens)
 
 
-class GroqLLM:
-    """Groq chat completions via the HTTP API, streamed.
-
-    The official `groq` SDK is sync-only. We hit the same endpoint with
-    httpx (streaming) so we can yield tokens from a FastAPI handler
-    without blocking the event loop.
-    """
-
-    model: str
+class GroqLLM(LLMBackend):
+    """Groq-hosted models (llama, mixtral)."""
 
     def __init__(self, model: str | None = None) -> None:
         if not settings.groq_api_key:
@@ -57,60 +43,81 @@ class GroqLLM:
                 "GROQ_API_KEY is not configured. "
                 "Get one at https://console.groq.com/keys"
             )
+        self._client = Groq(api_key=settings.groq_api_key)
         self.model = model or settings.groq_model
-        self._client = httpx.AsyncClient(
-            base_url="https://api.groq.com/openai/v1",
-            headers={
-                "Authorization": f"Bearer {settings.groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            timeout=httpx.Timeout(60.0, connect=10.0),
-        )
 
-    async def stream(
-        self,
-        system: str,
-        user: str,
-        *,
-        temperature: float = 0.2,
-        max_tokens: int = 600,
-    ) -> AsyncIterator[str]:
-        payload = {
-            "model": self.model,
-            "messages": [
+    def complete(self, system: str, user: str, max_tokens: int = 800) -> str:
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": True,
-        }
-        async with self._client.stream(
-            "POST", "/chat/completions", json=payload
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                if not line.startswith("data: "):
-                    continue
-                data = line[len("data: "):]
-                if data.strip() == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-                delta = choices[0].get("delta") or {}
-                token = delta.get("content")
-                if token:
-                    yield token
+            max_tokens=max_tokens,
+            temperature=0.2,
+        )
+        return (response.choices[0].message.content or "").strip()
 
-    async def aclose(self) -> None:
-        await self._client.aclose()
+    async def stream(
+        self, system: str, user: str, max_tokens: int = 800
+    ) -> AsyncIterator[str]:
+        stream = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.2,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                yield delta
+
+
+class OpenAILLM(LLMBackend):
+    """OpenAI-compatible chat completion endpoint."""
+
+    def __init__(self, model: str | None = None) -> None:
+        if not settings.openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not configured. "
+                "Get one at https://platform.openai.com/api-keys"
+            )
+        self._client = OpenAI(api_key=settings.openai_api_key)
+        self.model = model or settings.groq_model
+
+    def complete(self, system: str, user: str, max_tokens: int = 800) -> str:
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.2,
+        )
+        return (response.choices[0].message.content or "").strip()
+
+    async def stream(
+        self, system: str, user: str, max_tokens: int = 800
+    ) -> AsyncIterator[str]:
+        stream = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.2,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                yield delta
 
 
 _backend: LLMBackend | None = None
@@ -124,26 +131,35 @@ def set_llm(backend: LLMBackend) -> None:
 def get_llm() -> LLMBackend:
     if _backend is not None:
         return _backend
-    backend = GroqLLM()
+    provider = settings.llm_provider
+    if provider == "groq":
+        backend: LLMBackend = GroqLLM()
+    elif provider == "openai":
+        backend = OpenAILLM()
+    else:
+        raise RuntimeError(f"Unknown LLM provider: {provider}")
     set_llm(backend)
     return backend
 
 
-def build_user_prompt(question: str, chunks: Sequence[RetrievedChunk]) -> str:
-    """Build the user message: the question + a numbered context block."""
-    if not chunks:
-        return (
-            f"Question: {question}\n\n"
-            "Context: (no relevant documents found)"
-        )
-    parts = [f"Question: {question}\n", "Context:"]
+def _location(chunk) -> str:
+    if chunk.page_start is not None and chunk.page_end is not None:
+        if chunk.page_start == chunk.page_end:
+            return f"page {chunk.page_start}"
+        return f"pages {chunk.page_start}-{chunk.page_end}"
+    if chunk.start_seconds is not None and chunk.end_seconds is not None:
+        return f"{chunk.start_seconds:.1f}s-{chunk.end_seconds:.1f}s"
+    return "no-location"
+
+
+def build_user_prompt(question: str, chunks: Sequence) -> str:
+    """Render the user prompt with numbered context blocks.
+
+    Each chunk becomes ``[i] filename (location)\\n<text>``. The indices
+    correspond to the sources list returned by /api/v1/query.
+    """
+    blocks: list[str] = []
     for i, c in enumerate(chunks, start=1):
-        parts.append(
-            f"\n[{i}] filename={c.filename} page={c.page_start} "
-            f"score={c.score:.3f}\n{c.text}"
-        )
-    parts.append(
-        "\nAnswer the question using only the context above. "
-        "Cite sources inline as [doc:<filename> page=<n>]."
-    )
-    return "\n".join(parts)
+        blocks.append(f"[{i}] {c.filename} ({_location(c)})\n{c.text.strip()}")
+    context = "\n\n".join(blocks) if blocks else "(no context)"
+    return f"Question:\n{question}\n\nContext:\n{context}"
