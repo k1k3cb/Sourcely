@@ -12,6 +12,13 @@ from app.services.embeddings import get_embeddings
 logger = logging.getLogger(__name__)
 
 
+# Minimum similarity (cosine, 0..1) for a chunk to be returned. Below this
+# threshold we drop the chunk, treating it as noise from the vector index.
+# Tuned for `gemini-embedding-001`; near-zero scores mean the chunk is
+# semantically unrelated to the question.
+MIN_SCORE = 0.45
+
+
 @dataclass(frozen=True)
 class RetrievedChunk:
     chunk_id: UUID
@@ -31,9 +38,16 @@ async def retrieve(
     session: AsyncSession,
     user_id: UUID,
     question: str,
-    k: int = 5,
+    k: int = 8,
+    min_score: float = MIN_SCORE,
 ) -> list[RetrievedChunk]:
-    """Return the k chunks most similar to `question`, scoped to the user.
+    """Return up to ``k`` chunks most similar to ``question``, scoped to
+    the user, filtering out those whose similarity is below ``min_score``.
+
+    We over-fetch (k * 3) from the index to compensate for chunks dropped
+    by the threshold. If none of the top chunks clear the threshold, the
+    caller sees an empty list and the chat surfaces the "no documents"
+    fallback.
 
     The query ALWAYS joins chunks to documents and filters by
     documents.user_id. There is no code path that searches chunks without
@@ -54,6 +68,7 @@ async def retrieve(
     # pgvector: '[v1,v2,...]'. SQLAlchemy doesn't auto-bind list[float>
     # to the vector type, so we format it ourselves.
     q_vec_str = "[" + ",".join(f"{x:.8f}" for x in query_vec) + "]"
+    fetch_k = max(k * 3, k)
     sql = text(
         """
         select
@@ -71,7 +86,7 @@ async def retrieve(
         where d.user_id = :user_id
           and c.embedding_model = :model
         order by c.embedding <=> CAST(:q_vec AS vector)
-        limit :k
+        limit :fetch_k
         """
     )
 
@@ -81,25 +96,34 @@ async def retrieve(
             "q_vec": q_vec_str,
             "user_id": str(user_id),
             "model": embeddings.model,
-            "k": k,
+            "fetch_k": fetch_k,
         },
     )
 
     rows = result.mappings().all()
-    return [
-        RetrievedChunk(
-            chunk_id=r["chunk_id"],
-            document_id=r["document_id"],
-            filename=r["filename"],
-            page_start=r["page_start"],
-            page_end=r["page_end"],
-            start_seconds=r["start_seconds"],
-            end_seconds=r["end_seconds"],
-            text=r["text"],
-            score=float(r["score"]),
+    out: list[RetrievedChunk] = []
+    for r in rows:
+        score = float(r["score"])
+        if score < min_score:
+            # The rows arrive ordered by descending similarity, so once
+            # we drop one we can stop scanning.
+            break
+        out.append(
+            RetrievedChunk(
+                chunk_id=r["chunk_id"],
+                document_id=r["document_id"],
+                filename=r["filename"],
+                page_start=r["page_start"],
+                page_end=r["page_end"],
+                start_seconds=r["start_seconds"],
+                end_seconds=r["end_seconds"],
+                text=r["text"],
+                score=score,
+            )
         )
-        for r in rows
-    ]
+        if len(out) >= k:
+            break
+    return out
 
 
 async def _embed_query(embeddings, question: str) -> list[float]:
