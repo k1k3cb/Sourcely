@@ -110,3 +110,12 @@
 - To run: set `RUN_INTEGRATION=1` and provide `SUPABASE_POOLER_URL`.
 - Cost per run: ~$0.0001 in Gemini + a few free-tier Groq tokens.
 - Do not run in a tight loop. Use before deploys or in CI with secrets.
+
+## Row-Level Security (RLS)
+- All five tables have RLS enabled with policies scoped by `user_id`
+  (chunks/messages scope through their parent documents/conversations).
+- The backend uses the `service_role` key, which bypasses RLS by
+  default in Postgres. The policies document intent and protect against
+  a misconfigured client connecting directly via the anon key.
+- Apply the policies with `python scripts/enable_rls.py`. The script
+  is idempotent and reads `DATABASE_URL` from `backend/.env`.

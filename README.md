@@ -154,6 +154,19 @@ RUN_INTEGRATION=1 pytest tests/integration/   # ataca a Gemini + Groq + Supabase
 
 La *suite* de integración es opcional y cuesta ~$0,0001 por ejecución. Úsala antes de los despliegues.
 
+### 🔐 Seguridad: Row-Level Security
+
+Las cinco tablas (`users`, `documents`, `chunks`, `conversations`, `messages`) tienen **Row-Level Security** activa con políticas que filtran por `user_id`. El backend usa la clave `service_role` que bypasa RLS (es la práctica correcta de Supabase). Si un atacante obtiene la clave `anon` e intenta leer la base de datos por el API REST público, solo verá sus propias filas.
+
+Para aplicar las políticas (idempotente):
+
+```bash
+cd backend
+python scripts/enable_rls.py
+```
+
+El script lee `DATABASE_URL` de `backend/.env` y crea las 5 políticas con scoping por `user_id`.
+
 ### Frontend (vitest)
 
 ```bash
