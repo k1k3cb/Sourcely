@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-label="Sourcely documents screenshot">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafaf9" />
+      <stop offset="100%" stop-color="#f4f4f5" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)" />
+  <rect x="40" y="40" width="1120" height="640" rx="14" fill="#ffffff" stroke="#e4e4e7" />
+  <rect x="40" y="40" width="1120" height="40" rx="14" fill="#f4f4f5" />
+  <circle cx="64" cy="60" r="6" fill="#ef4444" />
+  <circle cx="84" cy="60" r="6" fill="#eab308" />
+  <circle cx="104" cy="60" r="6" fill="#22c55e" />
+  <!-- Header -->
+  <text x="80" y="130" font-family="ui-monospace, monospace" font-size="14" font-weight="700" fill="#18181b">sourcely</text>
+  <text x="200" y="130" font-family="ui-sans-serif, system-ui" font-size="14" fill="#71717a">Chat</text>
+  <text x="270" y="130" font-family="ui-sans-serif, system-ui" font-size="14" font-weight="600" fill="#18181b">Documents</text>
+  <line x1="80" y1="148" x2="800" y2="148" stroke="#e4e4e7" />
+  <!-- Dropzone -->
+  <rect x="180" y="190" width="840" height="120" rx="10" fill="none" stroke="#a1a1aa" stroke-dasharray="8 6" />
+  <text x="600" y="248" font-family="ui-sans-serif, system-ui" font-size="14" font-weight="600" fill="#18181b" text-anchor="middle">Drop a PDF or audio file here, or click to choose</text>
+  <text x="600" y="272" font-family="ui-sans-serif, system-ui" font-size="12" fill="#71717a" text-anchor="middle">PDF up to 20 MB · audio/video up to 200 MB</text>
+  <!-- List -->
+  <rect x="180" y="340" width="840" height="60" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+  <rect x="194" y="354" width="14" height="20" rx="2" fill="#fee2e2" />
+  <text x="194" y="392" font-family="ui-sans-serif, system-size" font-size="9" font-weight="700" fill="#dc2626" text-anchor="middle">PDF</text>
+  <text x="220" y="370" font-family="ui-sans-serif, system-ui" font-size="13" font-weight="600" fill="#18181b">modelo-proxecto-castelan.pdf</text>
+  <text x="220" y="388" font-family="ui-sans-serif, system-ui" font-size="11" fill="#71717a">2.4 MB · 28 pages · Aug 10, 2026</text>
+  <rect x="940" y="358" width="60" height="22" rx="11" fill="#d1fae5" />
+  <text x="970" y="373" font-family="ui-sans-serif, system-ui" font-size="11" font-weight="600" fill="#065f46" text-anchor="middle">Ready</text>
+
+  <rect x="180" y="412" width="840" height="60" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+  <rect x="194" y="426" width="14" height="20" rx="2" fill="#ede9fe" />
+  <text x="194" y="464" font-family="ui-sans-serif, system-ui" font-size="9" font-weight="700" fill="#7c3aed" text-anchor="middle">MP3</text>
+  <text x="220" y="442" font-family="ui-sans-serif, system-ui" font-size="13" font-weight="600" fill="#18181b">noticiero-terremoto.mp3</text>
+  <text x="220" y="460" font-family="ui-sans-serif, system-ui" font-size="11" fill="#71717a">6.1 MB · 3:42 · Aug 10, 2026</text>
+  <rect x="940" y="430" width="60" height="22" rx="11" fill="#fef3c7" />
+  <text x="970" y="445" font-family="ui-sans-serif, system-ui" font-size="11" font-weight="600" fill="#92400e" text-anchor="middle">Ready</text>
+
+  <rect x="180" y="484" width="840" height="60" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+  <rect x="194" y="498" width="14" height="20" rx="2" fill="#fce7f3" />
+  <text x="194" y="536" font-family="ui-sans-serif, system-ui" font-size="9" font-weight="700" fill="#be185d" text-anchor="middle">MP4</text>
+  <text x="220" y="514" font-family="ui-sans-serif, system-ui" font-size="13" font-weight="600" fill="#18181b">eclipse.mp4</text>
+  <text x="220" y="532" font-family="ui-sans-serif, system-ui" font-size="11" fill="#71717a">42.0 MB · 1:18 · Aug 10, 2026</text>
+  <rect x="940" y="502" width="60" height="22" rx="11" fill="#fef3c7" />
+  <text x="970" y="517" font-family="ui-sans-serif, system-ui" font-size="11" font-weight="600" fill="#92400e" text-anchor="middle">Processing</text>
+</svg>

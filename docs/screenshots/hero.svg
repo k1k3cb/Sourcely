@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" role="img" aria-label="Sourcely high-level overview">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#3b3b3b" />
+      <stop offset="100%" stop-color="#0a0a0a" />
+    </radialGradient>
+  </defs>
+  <rect width="800" height="480" fill="url(#g)" />
+  <text x="400" y="120" font-family="ui-monospace, monospace" font-size="64" font-weight="700" fill="#fafafa" text-anchor="middle">sourcely</text>
+  <text x="400" y="180" font-family="ui-sans-serif, system-ui" font-size="20" fill="#a1a1aa" text-anchor="middle">RAG document assistant</text>
+  <text x="400" y="210" font-family="ui-sans-serif, system-ui" font-size="16" fill="#71717a" text-anchor="middle">upload PDFs &amp; audio · ask in natural language · get cited answers</text>
+  <g transform="translate(220,290)" font-family="ui-monospace, monospace" font-size="13" fill="#e4e4e7">
+    <rect width="120" height="40" rx="6" fill="#18181b" stroke="#3f3f46" />
+    <text x="60" y="25" text-anchor="middle">PDF</text>
+    <rect x="140" width="120" height="40" rx="6" fill="#18181b" stroke="#3f3f46" />
+    <text x="200" y="25" text-anchor="middle">MP3</text>
+    <rect x="280" width="120" height="40" rx="6" fill="#18181b" stroke="#3f3f46" />
+    <text x="340" y="25" text-anchor="middle">MP4</text>
+  </g>
+</svg>

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-label="Sourcely chat screenshot">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafaf9" />
+      <stop offset="100%" stop-color="#f4f4f5" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="0.10" />
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)" />
+  <!-- Window chrome -->
+  <rect x="40" y="40" width="1120" height="640" rx="14" fill="#ffffff" stroke="#e4e4e7" />
+  <rect x="40" y="40" width="1120" height="40" rx="14" fill="#f4f4f5" />
+  <circle cx="64" cy="60" r="6" fill="#ef4444" />
+  <circle cx="84" cy="60" r="6" fill="#eab308" />
+  <circle cx="104" cy="60" r="6" fill="#22c55e" />
+  <rect x="500" y="50" width="200" height="20" rx="6" fill="#e4e4e7" />
+  <!-- Header -->
+  <text x="80" y="130" font-family="ui-monospace, monospace" font-size="14" font-weight="700" fill="#18181b">sourcely</text>
+  <text x="200" y="130" font-family="ui-sans-serif, system-ui" font-size="14" font-weight="600" fill="#18181b">Chat</text>
+  <text x="270" y="130" font-family="ui-sans-serif, system-ui" font-size="14" fill="#71717a">Documents</text>
+  <line x1="80" y1="148" x2="800" y2="148" stroke="#e4e4e7" />
+  <text x="980" y="130" font-family="ui-sans-serif, system-ui" font-size="12" fill="#71717a">user@example.com</text>
+  <rect x="1100" y="116" width="48" height="22" rx="4" fill="none" stroke="#e4e4e7" />
+  <text x="1110" y="131" font-family="ui-sans-serif, system-ui" font-size="11" fill="#18181b">Sign out</text>
+  <!-- Chat thread -->
+  <g font-family="ui-sans-serif, system-ui" font-size="14">
+    <!-- User bubble -->
+    <rect x="820" y="190" width="280" height="44" rx="10" fill="#18181b" />
+    <text x="838" y="217" fill="#fafafa">en qué país pasó el terremoto</text>
+    <!-- Assistant bubble -->
+    <rect x="80" y="260" width="900" height="120" rx="10" fill="#f4f4f5" stroke="#e4e4e7" />
+    <text x="100" y="286" fill="#3f3f46">El terremoto pasó en</text>
+    <text x="100" y="310" font-weight="600" fill="#18181b">Colombia</text>
+    <text x="170" y="310" fill="#3f3f46">, con epicentro en San José del</text>
+    <text x="100" y="334" fill="#3f3f46">Palmar, costa del Pacífico. La magnitud fue de</text>
+    <text x="100" y="358" font-weight="600" fill="#18181b">7.4</text>
+    <text x="140" y="358" fill="#3f3f46">, a 100 km de profundidad [1][2][3].</text>
+    <!-- Source cards -->
+    <g transform="translate(80,400)">
+      <rect width="900" height="60" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+      <text x="14" y="22" font-weight="700" fill="#18181b" font-size="12">[1] 2.mp3</text>
+      <text x="80" y="22" fill="#71717a" font-size="11">0:22 – 0:50 · 71%</text>
+      <text x="14" y="44" fill="#52525b" font-size="11">Es el terremoto hasta ahora más grave de la última década en Colombia. Su magnitud ha sido…</text>
+    </g>
+    <g transform="translate(80,470)">
+      <rect width="900" height="60" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+      <text x="14" y="22" font-weight="700" fill="#18181b" font-size="12">[2] 2.mp3</text>
+      <text x="80" y="22" fill="#71717a" font-size="11">1:50 – 2:19 · 73%</text>
+      <text x="14" y="44" fill="#52525b" font-size="11">se está moviendo muy intensamente. Mire, ahí estamos viendo la imagen en Cali…</text>
+    </g>
+    <g transform="translate(80,540)">
+      <rect width="900" height="60" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+      <text x="14" y="22" font-weight="700" fill="#18181b" font-size="12">[3] 2.mp3</text>
+      <text x="80" y="22" fill="#71717a" font-size="11">2:20 – 2:49 · 70%</text>
+      <text x="14" y="44" fill="#52525b" font-size="11">Un sismo muy grande que afectó muy fuerte la ciudad de Manizales. El gobierno ha decretado…</text>
+    </g>
+  </g>
+  <!-- Input -->
+  <rect x="80" y="620" width="900" height="36" rx="8" fill="#ffffff" stroke="#e4e4e7" />
+  <text x="100" y="643" font-family="ui-sans-serif, system-ui" font-size="13" fill="#a1a1aa">Ask a question…</text>
+  <rect x="906" y="624" width="70" height="28" rx="6" fill="#18181b" />
+  <text x="928" y="643" font-family="ui-sans-serif, system-ui" font-size="12" fill="#fafafa">Send</text>
+</svg>

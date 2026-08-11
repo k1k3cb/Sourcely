@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sourcely · frontend
 
-## Getting Started
+App con Next.js 16 (App Router) para el asistente RAG de Sourcely. Capa autenticada con dos rutas: `/chat` (preguntas con streaming sobre tus documentos) y `/documents` (subida por drag-and-drop con seguimiento de estado).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** con App Router y Turbopack
+- **React 19**
+- **TypeScript 5**
+- **Tailwind CSS v4** con tokens de tema
+- **Sonner** para toasts
+- **Vitest** + **Testing Library** para tests unitarios
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.local.example .env.local
+# Apuntar NEXT_PUBLIC_API_URL al backend, por ejemplo http://localhost:8000
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App: `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm dev          # servidor de desarrollo con Turbopack
+pnpm build        # build de producción
+pnpm start        # servir el build de producción
+pnpm lint         # eslint
+pnpm test         # vitest, corrida única
+pnpm test:watch   # vitest, modo watch
+```
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  chat/           Ruta /chat (server: lookup de auth · client: ChatClient)
+  documents/      Ruta /documents (server: lista precargada · client: dropzone)
+  login/          /login (form contra /api/v1/auth/login)
+  register/       /register (form contra /api/v1/auth/register)
+  layout.tsx      Layout raíz, monta <Toaster /> y <ThemeToggle />
+  globals.css     Tokens de diseño (variantes claro/oscuro)
+components/
+  AppHeader       Wordmark + nav, usado en rutas protegidas
+  ChatClient      Chat con streaming y deep links en SourceCard
+  DocumentsClient Dropzone + lista con toasts de confirmación de borrado
+  SourceCard      Card de cita (jump a audio / deep link a PDF / resaltado)
+  ThemeToggle     Switch claro/oscuro con persistencia en localStorage
+  LogoutButton    Llama a /api/v1/auth/logout y redirige
+lib/
+  api.ts          Wrapper tipado de fetch, SSE streamQuery, getChunkText
+  auth.ts         Forwarder de cookies server-side para fetches en SSR
+proxy.ts          Guard de rutas (redirige a usuarios sin autenticar)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## SSR y cookies
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+El código de browser usa `lib/api.ts` con `credentials: "include"`. Los server components no pueden confiar en eso: leen la cookie `token` con `next/headers` y la pasan explícitamente al backend mediante `apiServerFetch` de `lib/auth.ts`.
 
-## Deploy on Vercel
+## Tests
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm test
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Seis tests cubren la superficie crítica:
+
+1. `SourceCard` renderiza `view p. N` para PDFs y `jump to m:ss` para audio (estado idle).
+2. `SourceCard` cambia al botón `stop` cuando el chunk es el audio activo.
+3. El clic en stop invoca `onStopAudio` y elimina el control de jump del DOM.
+4. `ChatClient` stremea tokens dentro del mensaje del asistente y termina con el evento `done`.
+5. `ChatClient` muestra un evento `error` del stream como mensaje rojo y vuelve a habilitar el input.
+6. `DocumentsClient` rechaza archivos que no sean PDF/audio y nunca llama al endpoint de upload.

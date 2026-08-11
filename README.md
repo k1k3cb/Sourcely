@@ -1,60 +1,201 @@
 # Sourcely
 
-RAG document assistant: upload PDFs, ask questions, get cited answers from your own documents.
+> Haz preguntas sobre tus propios PDFs y audios. Obtén respuestas citadas con marcadores `[1]` `[2]` que saltan directo a la fuente.
 
-## Stack
-- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind
-- **Backend**: FastAPI + SQLAlchemy 2 (async) + pgvector
-- **DB / Storage**: Supabase (Postgres + pgvector + Storage)
-- **Embeddings**: OpenAI `text-embedding-3-small` (dim 768)
-- **LLM**: Groq Llama 3.1 70B
-- **Deploy**: Vercel (frontend) + Render (backend) — both free tier
+![Hero de Sourcely](docs/screenshots/hero.svg)
 
-## Layout
-- `backend/` — FastAPI service. See `backend/README.md` and `backend/AGENTS.md`.
-- `frontend/` — Next.js app.
+[![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-22c55e?style=for-the-badge)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16.3-000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Supabase](https://img.shields.io/badge/Supabase-pgvector-3ecf8e?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
 
-## Local development
-1. Create a Supabase project and enable the `vector` extension in the SQL editor.
-2. Create a private Storage bucket named `documents`.
-3. Copy `backend/.env.example` to `backend/.env` and fill in the values.
-4. Backend:
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   alembic upgrade head
-   uvicorn app.main:app --reload --port 8000
-   ```
-   Swagger: <http://127.0.0.1:8000/docs>
-5. Frontend:
-   ```bash
-   cd frontend
-   cp .env.local.example .env.local
-   pnpm install
-   pnpm dev
-   ```
-   App: <http://127.0.0.1:3000>
+---
 
-If port 8000 is held by a zombie socket on Windows, the backend can
-be started on any other port (e.g. `--port 8005`) and the frontend
-`NEXT_PUBLIC_API_URL` updated to match.
+## 💡 Resumen
 
-## Tests
-- **Unit tests** (default, fast, offline):
-  ```bash
-  cd backend
-  pytest
-  ```
-  73 tests covering auth, documents, chunking, indexing, audio,
-  query, streaming, conversations. All in-memory with SQLite.
-- **Integration smoke tests** (skipped by default, hit real services):
-  ```bash
-  export RUN_INTEGRATION=1
-  export SUPABASE_POOLER_URL=postgresql://postgres:...@...pooler.supabase.com:5432/postgres
-  pytest tests/integration/
-  ```
-  Runs against live Gemini + Groq + Supabase. Cost: ~$0.0001 per
-  run. Use before deploys or in CI with secrets.
+Sourcely es un asistente RAG (Retrieval-Augmented Generation) completo que podés correr en tu propia máquina. Subís una mezcla de PDFs y archivos de audio, hacés una pregunta en lenguaje natural y el sistema recupera los chunks más relevantes, genera una respuesta fundamentada y cita cada afirmación al número de página o al segundo exacto del audio donde se encontró.
 
-## License
-MIT
+El proyecto cubre todo el pipeline: ingesta (parseo de PDF, transcripción de audio con `whisper.cpp`), chunking, embedding (`gemini-embedding-001`, 768 dim, similitud coseno sobre `pgvector` HNSW), recuperación con filtro por usuario y generación de respuesta (`llama-3.3-70b` en Groq) enviada al navegador como streaming por Server-Sent Events.
+
+![Chat con citas](docs/screenshots/chat.svg)
+
+## ✨ Funcionalidades
+
+- **📄 Ingesta multi-formato** — PDFs (`pypdf`) y audio/video (mp3, wav, m4a, flac, ogg, mp4, webm, mov) a través de un único `POST /api/v1/documents/upload`. La validación se hace por magic bytes, no por el MIME declarado.
+- **🔍 Recuperación semántica** — embeddings de Gemini a 768 dim con `RETRIEVAL_DOCUMENT` al indexar y `RETRIEVAL_QUERY` al consultar. Índice HNSW con distancia coseno.
+- **👤 Aislamiento por usuario** — cada lectura de chunks se filtra por `documents.user_id` en la capa SQL. El usuario A nunca puede ver los chunks del usuario B, ni con un prompt falsificado.
+- **🧠 Respuestas fundamentadas con citas** — el system prompt obliga a "responder solo del contexto, citar `[1]` `[2]`". Sin datos inventados, sin alucinaciones silenciosas.
+- **⚡ Respuestas en streaming** — `POST /api/v1/query/stream` empuja tokens por SSE mientras el modelo los produce. La UI muestra el cursor y concatena los tokens en vivo.
+- **🎯 Click a la fuente** — cada card de cita lleva un botón de deep link: para PDFs abre la URL firmada con `#page=N`; para audio setea el `currentTime` del elemento `<audio>` al `start_seconds` del chunk y arranca la reproducción.
+- **🔎 Resaltado en la cita** — la card de fuente resalta dentro del texto del chunk las palabras de tu pregunta, para que veas de un vistazo por qué se recuperó ese pasaje.
+- **📊 Ranking por score** — cada resultado de la recuperación trae un score de similitud coseno mostrado como porcentaje. Un umbral configurable `MIN_SCORE` descarta chunks por debajo de la relevancia y evita contexto ruidoso.
+- **🛡 Auth con JWT en cookie** — `HttpOnly`, `SameSite=Lax`, expiración de 7 días. `get_current_user` re-chequea la fila de usuario en cada request, así un usuario borrado queda bloqueado de inmediato.
+- **🌗 Claro y oscuro** — tema tokenizado vía script inline (sin parpadeo en la primera pintura), persistido en `localStorage`.
+- **🔔 Toasts con Sonner** — subidas, borrados y errores aparecen como toasts efímeros en vez de como modales.
+
+![Zona de drop de Documents](docs/screenshots/documents.svg)
+
+## 👩‍💻 Stack
+
+- **Next.js 16** con App Router y Turbopack. Server Components para la capa autenticada, client components solo para el chat y el dropzone.
+- **TypeScript 5** en modo strict.
+- **Tailwind v4** con `@theme inline` para exponer variables CSS como utilities y un variant custom para la clase `dark`.
+- **Sonner** para toasts.
+- **FastAPI** con SQLAlchemy 2 async y `asyncpg`.
+- **pgvector** sobre Supabase para búsqueda por similitud con índice HNSW.
+- **Alembic** para migraciones de esquema.
+- **Gemini** (`text-embedding-001`) para embeddings, **Groq** (`llama-3.3-70b-versatile`) para generación.
+- **whisper.cpp** vía los bindings de Python `faster-whisper` para transcripción de audio.
+- **Supabase Storage** para almacenamiento privado de los archivos originales; las descargas van por URLs firmadas.
+- **Pytest** (backend) y **Vitest + Testing Library** (frontend) para tests.
+
+## 🏗 Arquitectura
+
+![Arquitectura](docs/screenshots/architecture.svg)
+
+El navegador habla con Next.js, que envía todo a FastAPI a través de un único origen CORS. El backend se ocupa de tres cosas: deriva embeddings y guarda chunks con FK al documento del usuario, ejecuta búsqueda por similitud filtrada por `user_id`, y le pide al LLM una respuesta con citas. El audio usa la misma tabla de chunks pero guarda `start_seconds` / `end_seconds` en lugar de número de página.
+
+## 📖 Fuentes y APIs
+
+- **[Gemini Embeddings](https://ai.google.dev/)** — `text-embedding-001`, plan gratuito ~1500 requests/día.
+- **[Groq](https://console.groq.com/)** — `llama-3.3-70b-versatile` para inferencia rápida.
+- **[Supabase](https://supabase.com/)** — Postgres administrado con `pgvector` y storage compatible con S3.
+- **[faster-whisper](https://github.com/SYSTRAN/faster-whisper)** — transcripción Whisper amigable con CPU.
+- **[Next.js](https://nextjs.org/)** — server components, route handlers y respuestas streaming compatibles con SSE.
+- **[Tailwind CSS v4](https://tailwindcss.com/)** — utilities con tokens de tema.
+
+## 📦 Primeros pasos
+
+### 🚀 Requisitos
+
+- **Python 3.11+** con `pip` y `venv`.
+- **Node.js 20+** con `pnpm` (`npm install -g pnpm` si no lo tenés).
+- **Postgres 15+** con la extensión `vector`, **o** un proyecto en Supabase (plan gratuito sirve) con `vector` activado desde el editor SQL.
+- API keys de **Gemini** (gratis) y **Groq** (plan gratuito).
+
+### 🛠 Instalación
+
+```bash
+# 1. Clonar
+git clone https://github.com/<tu-usuario>/sourcely.git
+cd sourcely
+
+# 2. Backend
+cd backend
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS / Linux:
+# source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Completar DATABASE_URL, GEMINI_API_KEY, GROQ_API_KEY y las SUPABASE_*.
+
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+
+# 3. Frontend (en otra terminal)
+cd ../frontend
+cp .env.local.example .env.local
+pnpm install
+pnpm dev
+```
+
+> Abrí `http://localhost:3000`. El frontend habla con el backend en `http://localhost:8000`.
+
+### 📃 Documentación de la API
+
+FastAPI genera documentación OpenAPI automáticamente:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+Endpoints principales:
+
+| Método | Path                                | Auth      | Descripción                                                |
+| ------ | ----------------------------------- | --------- | ---------------------------------------------------------- |
+| POST   | `/api/v1/auth/register`             | —         | Crea cuenta, devuelve el usuario.                          |
+| POST   | `/api/v1/auth/login`                | —         | Setea la cookie `token`, devuelve el usuario.              |
+| POST   | `/api/v1/auth/logout`               | —         | Borra la cookie `token`.                                   |
+| GET    | `/api/v1/auth/me`                   | requerido | Devuelve el usuario actual.                                |
+| POST   | `/api/v1/documents/upload`          | requerido | Subida multipart, PDF/audio/video ≤ 200 MB.               |
+| GET    | `/api/v1/documents`                 | requerido | Lista los documentos del usuario.                          |
+| GET    | `/api/v1/documents/{id}`            | requerido | Un documento + URL firmada.                               |
+| GET    | `/api/v1/documents/{id}/chunks/{id}` | requerido | Texto completo del chunk con campos de ubicación.       |
+| DELETE | `/api/v1/documents/{id}`            | requerido | Borrado físico de fila + objeto en storage.                |
+| POST   | `/api/v1/query`                     | requerido | Recuperación + respuesta del LLM (una respuesta JSON).     |
+| POST   | `/api/v1/query/stream`              | requerido | Igual, pero los tokens llegan por SSE.                     |
+
+## ▶️ Uso
+
+1. Abrí `http://localhost:3000` y hacé clic en `Create one` para registrarte.
+2. Después de iniciar sesión caés en `/chat`. Abrí `/documents` y soltá un PDF o audio en la zona punteada (o hacé clic para elegir uno).
+3. Esperá a que el pill de estado de la fila pase a `Ready` (corre el embedding / la transcripción en background).
+4. Volvé a `/chat` y hacé una pregunta. La respuesta se streamea abajo; cada `[n]` del texto corresponde a una card de cita numerada debajo.
+5. Hacé clic en `↳ view p. X` para abrir el PDF en esa página, o en `↳ jump to m:ss` para reproducir el audio desde el segundo citado.
+
+### ✔ Tips
+
+- El umbral de recuperación (`MIN_SCORE = 0.45` en `backend/app/services/retrieval.py`) descarta chunks no relacionados. Bajalo si recibís pocas citas, subilo si llegan cosas ruidosas.
+- El frontend usa `NEXT_PUBLIC_API_URL` para encontrar al backend. En Windows, si el puerto `:8000` lo tiene un socket zombie, lanzá uvicorn en otro puerto y actualizá la variable de entorno.
+- El toggle de tema claro/oscuro está en la esquina inferior derecha de cada página; la preferencia se guarda en `localStorage` y se aplica antes de la hidratación para evitar parpadeos.
+
+## 🧪 Tests
+
+### Backend (pytest)
+
+```bash
+cd backend
+pytest                               # tests unitarios, 73 casos, todos en memoria
+RUN_INTEGRATION=1 pytest tests/integration/   # pega contra Gemini + Groq + Supabase reales
+```
+
+La suite de integración es opcional y cuesta ~$0.0001 por corrida. Usala antes de deploys.
+
+### Frontend (vitest)
+
+```bash
+cd frontend
+pnpm test          # corrida única
+pnpm test:watch    # modo watch
+```
+
+Seis tests cubren la superficie crítica: `SourceCard` para render de PDF/audio/playing y el botón de stop, `ChatClient` para tokens en streaming y caminos de error, y `DocumentsClient` para rechazar tipos de archivo no aceptados.
+
+## 🗺 Roadmap
+
+- **Conversaciones** — historial multi-turno con hilos nombrados. Los endpoints `POST /api/v1/conversations`, `POST /api/v1/conversations/{id}/messages` ya existen en scaffolding.
+- **Endpoint de re-index** — `POST /api/v1/documents/{id}/reindex` para rehacer embeddings sin volver a subir.
+- **Rerank** — cross-encoder de segunda etapa (p. ej. `bge-reranker`) para mejorar la precisión del top-N.
+- **OAuth** — login con Google además de email y contraseña.
+- **i18n** — strings de UI extraídos; el LLM ya responde en el idioma del usuario.
+
+## 🤝 Contribuir
+
+Las contribuciones son bienvenidas. Flujo resumido:
+
+1. **Fork** y crear una rama (`git checkout -b feat/algo`).
+2. Correr los tests localmente: `pytest` en `backend/`, `pnpm test` en `frontend/`.
+3. Mantener los commits enfocados. Respetar el estilo existente — async-first en el backend, server components por defecto en el frontend.
+4. Abrir un **pull request** describiendo qué cambiaste y por qué. Si tocás la superficie de la API, actualizar la tabla de endpoints del README.
+
+## 🐛 Issues
+
+Si algo está roto o querés una funcionalidad, abrí un issue con:
+
+- Título claro y resumen de un párrafo.
+- Pasos para reproducir (con comandos curl o capturas cuando aplique).
+- Logs del servicio correspondiente (backend: salida de `uvicorn`; frontend: consola + pestaña Network de DevTools).
+- Entorno: SO, versión de Python, versión de Node, navegador.
+
+## 📜 Licencia
+
+Distribuido bajo la Licencia MIT. Ver [`LICENSE`](LICENSE) para el texto completo.
+
+<div align="center">
+
+<sub>Construido con FastAPI · Next.js · pgvector · whisper.cpp · Gemini · Groq</sub>
+
+</div>
