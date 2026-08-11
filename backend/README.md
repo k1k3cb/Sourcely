@@ -1,17 +1,17 @@
 # Sourcely · backend
 
-Servicio FastAPI que se ocupa de la autenticación, la ingesta de documentos, la generación aumentada por recuperación y el endpoint de consulta en streaming.
+Servicio FastAPI que se ocupa de la autenticación, la ingesta de documentos, la generación aumentada por recuperación y el *endpoint* de consulta en *streaming*.
 
 ## Stack
 
-- **FastAPI** + **Uvicorn** (async)
-- **SQLAlchemy 2** async + **asyncpg**
+- **FastAPI** + **Uvicorn** (*async*)
+- **SQLAlchemy 2** *async* + **asyncpg**
 - Migraciones con **Alembic**
 - **pgvector** (Postgres en Supabase) para búsqueda por similitud
-- **Gemini** `text-embedding-001` (768 dim) para embeddings
-- **Groq** `llama-3.3-70b-versatile` para generación de respuestas
-- **faster-whisper** para transcripción de audio (`whisper.cpp` por debajo)
-- **Supabase Storage** para los PDFs y archivos de audio originales
+- **Gemini** `text-embedding-001` (768 dim) para *embeddings*
+- **Groq** `llama-3.3-70b-versatile` para la generación de respuestas
+- **faster-whisper** para transcripción de audio (`whisper.cpp* por debajo)
+- **Supabase Storage** para los PDF y ficheros de audio originales
 - **JWT** (HS256) en una cookie `HttpOnly`, `SameSite=Lax`
 
 ## Setup
@@ -25,7 +25,7 @@ python -m venv .venv
 
 pip install -r requirements.txt
 cp .env.example .env
-# Completar DATABASE_URL, JWT_SECRET, GEMINI_API_KEY, GROQ_API_KEY y SUPABASE_*.
+# Rellenar DATABASE_URL, JWT_SECRET, GEMINI_API_KEY, GROQ_API_KEY y SUPABASE_*.
 
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
@@ -43,7 +43,7 @@ app/
   models/      Modelos de SQLAlchemy (User, Document, Chunk)
   schemas/     DTOs de Pydantic
   services/    Ingesta, embeddings, retrieval, llm, transcripción, storage
-  tasks/       Jobs de indexado en background
+  tasks/       Jobs de indexado en segundo plano
 alembic/       Migraciones
 tests/         Suites de pytest unitarias y de integración
 ```
@@ -52,15 +52,15 @@ tests/         Suites de pytest unitarias y de integración
 
 ```bash
 pytest                                # tests unitarios, sin servicios externos
-RUN_INTEGRATION=1 pytest tests/integration/   # pega contra Gemini + Groq + Supabase reales
+RUN_INTEGRATION=1 pytest tests/integration/   # ataca a Gemini + Groq + Supabase reales
 ```
 
-73 tests unitarios cubren auth, subida de documentos, chunking, indexado, transcripción de audio, query, streaming y conversaciones.
+73 tests unitarios cubren autenticación, subida de documentos, troceado, indexado, transcripción de audio, *query*, *streaming* y conversaciones.
 
 ## Convenciones
 
-- Async everywhere. SQLAlchemy 2 async, driver `asyncpg`, `httpx` para HTTP saliente y los clientes async de los SDK de Groq y Gemini.
-- Un modelo ORM por archivo en `app/models/`, re-exportados en `__init__.py` para que Alembic los vea en autogenerate.
+- *Async* por todas partes. SQLAlchemy 2 *async*, *driver* `asyncpg`, `httpx` para HTTP saliente y los clientes *async* de los SDK de Groq y Gemini.
+- Un modelo ORM por archivo bajo `app/models/`, reexportados en `__init__.py` para que Alembic los vea en autogenerate.
 - Lógica de negocio en `app/services/`, **nunca** en el router.
-- Los jobs en background usan `BackgroundTasks` de FastAPI con un motor sync dedicado (`psycopg`) para evitar choques con el event loop.
-- Los prompts RAG fijan al LLM al contexto entregado y prohiben inventar. Las fuentes se citan como `[1] [2]` numerando.
+- Los trabajos en segundo plano usan `BackgroundTasks` de FastAPI con un motor *sync* dedicado (`psycopg`) para evitar colisiones con el *event loop*.
+- Los *prompts* RAG fijan al LLM al contexto entregado y prohíben inventar. Las fuentes se citan como `[1] [2]` numerando.
