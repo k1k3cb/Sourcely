@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import auth, documents, query
+from app.api import auth, conversations, documents, query
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -38,6 +38,7 @@ async def _cors_safe_exception_handler(request: Request, exc: Exception) -> JSON
 
 
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(conversations.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
 

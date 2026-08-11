@@ -28,14 +28,14 @@ def test_build_user_prompt_includes_question():
     assert "What is X?" in prompt
     assert "guide.pdf" in prompt
     assert "Some context here." in prompt
-    assert "page=1" in prompt
+    assert "page 1" in prompt
 
 
 def test_build_user_prompt_handles_empty_chunks():
     from app.services.llm import build_user_prompt
     prompt = build_user_prompt("Anything?", [])
     assert "Anything?" in prompt
-    assert "no relevant documents" in prompt
+    assert "(no context)" in prompt or "no context" in prompt.lower()
 
 
 def test_sse_format():

@@ -39,5 +39,22 @@ If port 8000 is held by a zombie socket on Windows, the backend can
 be started on any other port (e.g. `--port 8005`) and the frontend
 `NEXT_PUBLIC_API_URL` updated to match.
 
+## Tests
+- **Unit tests** (default, fast, offline):
+  ```bash
+  cd backend
+  pytest
+  ```
+  73 tests covering auth, documents, chunking, indexing, audio,
+  query, streaming, conversations. All in-memory with SQLite.
+- **Integration smoke tests** (skipped by default, hit real services):
+  ```bash
+  export RUN_INTEGRATION=1
+  export SUPABASE_POOLER_URL=postgresql://postgres:...@...pooler.supabase.com:5432/postgres
+  pytest tests/integration/
+  ```
+  Runs against live Gemini + Groq + Supabase. Cost: ~$0.0001 per
+  run. Use before deploys or in CI with secrets.
+
 ## License
 MIT

@@ -3,6 +3,7 @@ uvicorn[standard]>=0.30,<0.53
 sqlalchemy[asyncio]>=2.0.36,<2.1
 asyncpg>=0.30,<0.31
 psycopg[binary]>=3.2,<4
+psycopg2-binary>=2.9,<3
 alembic>=1.13,<1.15
 pgvector>=0.3.6,<0.4
 pydantic>=2.10,<3

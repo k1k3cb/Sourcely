@@ -171,12 +171,18 @@ async def test_send_message_persists_user_and_assistant(client):
 
 @pytest.mark.asyncio
 async def test_send_message_validates_content(client):
+    # Register (may already exist; ignore 409)
     await client.post(
         "/api/v1/auth/register",
         json={"email": "jane@example.com", "password": "supersecret"},
     )
-    await client.post("/api/v1/auth/login", json={"email": "jane@example.com", "password": "supersecret"})
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "jane@example.com", "password": "supersecret"},
+    )
+    assert r.status_code == 200
     r = await client.post("/api/v1/conversations", json={})
+    assert r.status_code == 201
     cid = r.json()["id"]
     r = await client.post(
         f"/api/v1/conversations/{cid}/messages", json={"content": ""}
