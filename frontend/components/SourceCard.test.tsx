@@ -89,8 +89,8 @@ describe("SourceCard", () => {
     stop.click();
     expect(onStopAudio).toHaveBeenCalledOnce();
 
-    // Only the stop button should be rendered; no jump-to control.
-    expect(screen.queryByText(/jump to/i)).toBeNull();
+    // Exactly one button in the card (the stop control).
+    expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(onSeekAudio).not.toHaveBeenCalled();
   });
 });
